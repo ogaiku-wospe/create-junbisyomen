@@ -36,8 +36,8 @@ except ImportError:
     print("❌ global_config.py が見つかりません")
     sys.exit(1)
 
-# Google Drive APIのスコープ
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+# Google Drive APIのスコープ（読み書きフルアクセス）
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 
 class CaseManager:
