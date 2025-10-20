@@ -261,8 +261,112 @@ class EvidenceOrganizer:
         
         return f"{evidence_type}_{description}{ext}"
     
+    def get_existing_evidence_numbers(self, side: str = "ko") -> Dict:
+        """既存の証拠番号を分析
+        
+        Args:
+            side: "ko"（甲号証）または "otsu"（乙号証）
+        
+        Returns:
+            {
+                'numbers': [1, 2, 3, 5, 7],  # 既存の番号リスト
+                'gaps': [(3, 5), (5, 7)],      # 欠番の範囲
+                'max': 7,                      # 最大番号
+                'evidence_data': {1: {...}, 2: {...}}  # 証拠データ
+            }
+        """
+        result = {
+            'numbers': [],
+            'gaps': [],
+            'max': 0,
+            'evidence_data': {}
+        }
+        
+        try:
+            if not os.path.exists("database.json"):
+                return result
+            
+            with open("database.json", 'r', encoding='utf-8') as f:
+                database = json.load(f)
+            
+            evidence_list = database.get('evidence', [])
+            
+            # 該当する側の証拠番号を抽出
+            prefix = side.lower()
+            
+            for evidence in evidence_list:
+                evidence_id = evidence.get('evidence_id', '')
+                if evidence_id.startswith(prefix):
+                    # 番号部分を抽出（サフィックス付きも対応: ko70-2 → 70）
+                    match = re.match(r'[a-z]+([0-9]+)', evidence_id)
+                    if match:
+                        number = int(match.group(1))
+                        result['numbers'].append(number)
+                        result['evidence_data'][number] = {
+                            'evidence_id': evidence_id,
+                            'evidence_number': evidence.get('evidence_number', ''),
+                            'filename': evidence.get('original_filename', ''),
+                            'registered_at': evidence.get('registered_at', '')
+                        }
+            
+            if result['numbers']:
+                result['numbers'].sort()
+                result['max'] = max(result['numbers'])
+                
+                # 欠番を検出
+                for i in range(len(result['numbers']) - 1):
+                    current = result['numbers'][i]
+                    next_num = result['numbers'][i + 1]
+                    if next_num - current > 1:
+                        result['gaps'].append((current, next_num))
+            
+            return result
+            
+        except Exception as e:
+            print(f"⚠️ 証拠番号分析エラー: {e}")
+            return result
+    
+    def suggest_evidence_number_with_context(self, side: str, file_info: Dict, analysis: Dict) -> Dict:
+        """既存証拠を考慮して証拠番号を提案
+        
+        Args:
+            side: "ko" または "otsu"
+            file_info: ファイル情報
+            analysis: AI分析結果
+        
+        Returns:
+            提案情報（番号、理由、代替案を含む）
+        """
+        existing = self.get_existing_evidence_numbers(side)
+        
+        # デフォルト提案: 最大番号 + 1
+        default_number = existing['max'] + 1 if existing['max'] > 0 else 1
+        
+        suggestion = {
+            'primary': {
+                'number': default_number,
+                'reason': f"最新の証拠番号の次（{existing['max']}の次）"
+            },
+            'alternatives': []
+        }
+        
+        # 欠番がある場合は代替案として提示
+        if existing['gaps']:
+            for gap_start, gap_end in existing['gaps']:
+                gap_size = gap_end - gap_start - 1
+                if gap_size > 0:
+                    # 欠番の最初の番号を提案
+                    fill_number = gap_start + 1
+                    suggestion['alternatives'].append({
+                        'number': fill_number,
+                        'reason': f"欠番を埋める（{gap_start}と{gap_end}の間）",
+                        'gap': (gap_start, gap_end)
+                    })
+        
+        return suggestion
+    
     def get_next_evidence_number(self, side: str = "ko") -> int:
-        """次の証拠番号を取得
+        """次の証拠番号を取得（後方互換性のため残す）
         
         Args:
             side: "ko"（甲号証）または "otsu"（乙号証）
@@ -270,53 +374,28 @@ class EvidenceOrganizer:
         Returns:
             次の証拠番号
         """
-        # database.jsonから最新の証拠番号を取得
-        try:
-            if os.path.exists("database.json"):
-                with open("database.json", 'r', encoding='utf-8') as f:
-                    database = json.load(f)
-                
-                evidence_list = database.get('evidence', [])
-                
-                # 該当する側の証拠番号を抽出
-                prefix = side.lower()
-                numbers = []
-                
-                for evidence in evidence_list:
-                    evidence_id = evidence.get('evidence_id', '')
-                    if evidence_id.startswith(prefix):
-                        # 番号部分を抽出
-                        match = re.search(r'\d+', evidence_id)
-                        if match:
-                            numbers.append(int(match.group()))
-                
-                if numbers:
-                    return max(numbers) + 1
-                else:
-                    return 1
-            else:
-                return 1
-                
-        except Exception as e:
-            print(f"⚠️ 証拠番号取得エラー: {e}")
-            return 1
+        existing = self.get_existing_evidence_numbers(side)
+        return existing['max'] + 1 if existing['max'] > 0 else 1
     
     def propose_evidence_assignment(self, file_info: Dict, analysis: Dict) -> Dict:
-        """証拠番号の割り当てを提案
+        """証拠番号の割り当てを提案（既存証拠を考慮）
         
         Args:
             file_info: ファイル情報
             analysis: AI分析結果
         
         Returns:
-            提案情報
+            提案情報（代替案を含む）
         """
         side = "ko" if analysis['side'] == "plaintiff" else "otsu"
-        next_number = self.get_next_evidence_number(side)
         
-        # 証拠番号フォーマット
-        evidence_id = f"{side}{next_number:03d}"
-        evidence_number = f"{'甲' if side == 'ko' else '乙'}{next_number:03d}"
+        # 既存証拠を分析して提案
+        suggestion = self.suggest_evidence_number_with_context(side, file_info, analysis)
+        
+        # プライマリ提案
+        primary_number = suggestion['primary']['number']
+        evidence_id = f"{side}{primary_number:03d}"
+        evidence_number = f"{'甲' if side == 'ko' else '乙'}{primary_number:03d}"
         
         # ファイル名提案
         ext = os.path.splitext(file_info['name'])[1]
@@ -324,7 +403,7 @@ class EvidenceOrganizer:
         if not suggested_filename.endswith(ext):
             suggested_filename = os.path.splitext(suggested_filename)[0] + ext
         
-        return {
+        proposal = {
             "evidence_id": evidence_id,
             "evidence_number": evidence_number,
             "suggested_filename": suggested_filename,
@@ -332,8 +411,11 @@ class EvidenceOrganizer:
             "evidence_type": analysis['evidence_type'],
             "description": analysis['description'],
             "importance": analysis['importance'],
-            "original_filename": file_info['name']
+            "original_filename": file_info['name'],
+            "number_suggestion": suggestion  # 番号提案の詳細
         }
+        
+        return proposal
     
     def move_file_to_evidence_folder(self, file_info: Dict, proposal: Dict) -> bool:
         """ファイルを証拠フォルダに移動してリネーム
@@ -432,13 +514,23 @@ class EvidenceOrganizer:
             
             print(f"\n💡 提案:")
             print(f"  証拠番号: {proposal['evidence_number']}")
-            print(f"  ファイル名: {proposal['suggested_filename']}")
+            print(f"  理由: {proposal['number_suggestion']['primary']['reason']}")
+            
+            # 代替案がある場合は表示
+            if proposal['number_suggestion']['alternatives']:
+                print(f"\n  📋 代替案（欠番があります）:")
+                for i, alt in enumerate(proposal['number_suggestion']['alternatives'], 1):
+                    alt_num = alt['number']
+                    side_kanji = '甲' if proposal['side'] == 'ko' else '乙'
+                    print(f"    {i}. {side_kanji}{alt_num:03d} - {alt['reason']}")
+            
+            print(f"\n  ファイル名: {proposal['suggested_filename']}")
             print(f"  証拠種別: {proposal['evidence_type']}")
             print(f"  説明: {proposal['description']}")
             
             # ユーザー確認
             while True:
-                choice = input(f"\n実行しますか？ (y=実行, e=編集, s=スキップ, q=終了): ").strip().lower()
+                choice = input(f"\n実行しますか？ (y=実行, e=編集, a=代替案を選択, s=スキップ, q=終了): ").strip().lower()
                 
                 if choice == 'y':
                     # ファイル移動・リネーム
@@ -452,6 +544,15 @@ class EvidenceOrganizer:
                 elif choice == 'e':
                     # 編集モード
                     proposal = self._edit_proposal(proposal)
+                    continue
+                
+                elif choice == 'a':
+                    # 代替案を選択
+                    if not proposal['number_suggestion']['alternatives']:
+                        print("❌ 代替案がありません")
+                        continue
+                    
+                    proposal = self._select_alternative(proposal)
                     continue
                 
                 elif choice == 's':
@@ -497,6 +598,48 @@ class EvidenceOrganizer:
         except Exception as e:
             print(f"❌ ダウンロードエラー: {e}")
             return False
+    
+    def _select_alternative(self, proposal: Dict) -> Dict:
+        """代替案を選択"""
+        alternatives = proposal['number_suggestion']['alternatives']
+        
+        print("\n📋 代替案を選択:")
+        for i, alt in enumerate(alternatives, 1):
+            alt_num = alt['number']
+            side_kanji = '甲' if proposal['side'] == 'ko' else '乙'
+            print(f"  {i}. {side_kanji}{alt_num:03d} - {alt['reason']}")
+        
+        choice = input("\n番号を選択 (1-{}): ".format(len(alternatives))).strip()
+        
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(alternatives):
+                selected = alternatives[idx]
+                number = selected['number']
+                side = proposal['side']
+                
+                # 提案を更新
+                proposal['evidence_id'] = f"{side}{number:03d}"
+                proposal['evidence_number'] = f"{'甲' if side == 'ko' else '乙'}{number:03d}"
+                
+                # ファイル名も更新
+                ext = os.path.splitext(proposal['original_filename'])[1]
+                base_name = os.path.splitext(proposal['suggested_filename'])[0]
+                # 証拠番号部分だけ置き換え
+                parts = base_name.split('_', 1)
+                if len(parts) == 2:
+                    new_filename = f"{proposal['evidence_id']}_{parts[1]}{ext}"
+                else:
+                    new_filename = f"{proposal['evidence_id']}{ext}"
+                proposal['suggested_filename'] = new_filename
+                
+                print(f"\n✅ 代替案を選択: {proposal['evidence_number']}")
+            else:
+                print("❌ 無効な番号です")
+        except ValueError:
+            print("❌ 無効な入力です")
+        
+        return proposal
     
     def _edit_proposal(self, proposal: Dict) -> Dict:
         """提案を編集"""
