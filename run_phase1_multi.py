@@ -261,11 +261,16 @@ class Phase1MultiRunner:
                 "phase1_progress": []
             }
             
-            # ローカルに保存
+            # ローカルに一時保存
             with open('database.json', 'w', encoding='utf-8') as f:
                 json.dump(database, f, ensure_ascii=False, indent=2)
             
-            print(f"  ✅ database.json作成")
+            # Google Driveにアップロード
+            db_file_id = self._upload_database_to_gdrive('database.json', case_folder_id)
+            if db_file_id:
+                print(f"  ✅ database.json作成（Google Drive）")
+            else:
+                print(f"  ⚠️ database.jsonローカル作成のみ（Google Driveアップロード失敗）")
             
             # 事件情報を設定
             self.current_case = {
@@ -291,47 +296,241 @@ class Phase1MultiRunner:
             traceback.print_exc()
             return False
     
+    def _upload_database_to_gdrive(self, local_path: str, case_folder_id: str) -> Optional[str]:
+        """database.jsonをGoogle Driveにアップロード
+        
+        Args:
+            local_path: ローカルのdatabase.jsonパス
+            case_folder_id: 事件フォルダID
+        
+        Returns:
+            アップロードされたファイルID（失敗時はNone）
+        """
+        try:
+            service = self.case_manager.get_google_drive_service()
+            if not service:
+                return None
+            
+            from googleapiclient.http import MediaFileUpload
+            
+            file_metadata = {
+                'name': 'database.json',
+                'parents': [case_folder_id],
+                'mimeType': 'application/json'
+            }
+            
+            media = MediaFileUpload(local_path, mimetype='application/json', resumable=True)
+            
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                supportsAllDrives=True,
+                fields='id, name'
+            ).execute()
+            
+            logger.info(f"✅ database.jsonをGoogle Driveにアップロード: {file['id']}")
+            return file['id']
+            
+        except Exception as e:
+            logger.error(f"❌ database.jsonアップロード失敗: {e}")
+            return None
+    
+    def _download_database_from_gdrive(self, case_folder_id: str) -> Optional[Dict]:
+        """Google Driveからdatabase.jsonをダウンロード
+        
+        Args:
+            case_folder_id: 事件フォルダID
+        
+        Returns:
+            database.jsonの内容（Dict）、見つからない場合はNone
+        """
+        try:
+            service = self.case_manager.get_google_drive_service()
+            if not service:
+                return None
+            
+            # database.jsonを検索
+            query = f"name='database.json' and '{case_folder_id}' in parents and trashed=false"
+            results = service.files().list(
+                q=query,
+                corpora='drive',
+                driveId=self.case_manager.shared_drive_root_id,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields='files(id, name)',
+                pageSize=1
+            ).execute()
+            
+            files = results.get('files', [])
+            if not files:
+                logger.warning("⚠️ Google Driveにdatabase.jsonが見つかりません")
+                return None
+            
+            file_id = files[0]['id']
+            
+            # ファイルをダウンロード
+            import io
+            from googleapiclient.http import MediaIoBaseDownload
+            
+            request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+            
+            fh.seek(0)
+            database = json.loads(fh.read().decode('utf-8'))
+            
+            logger.info(f"✅ database.jsonをGoogle Driveからダウンロード")
+            return database
+            
+        except Exception as e:
+            logger.error(f"❌ database.jsonダウンロード失敗: {e}")
+            return None
+    
+    def _update_database_on_gdrive(self, database: Dict, case_folder_id: str) -> bool:
+        """Google Drive上のdatabase.jsonを更新
+        
+        Args:
+            database: 更新するdatabase.json内容
+            case_folder_id: 事件フォルダID
+        
+        Returns:
+            成功: True、失敗: False
+        """
+        try:
+            service = self.case_manager.get_google_drive_service()
+            if not service:
+                return False
+            
+            # 既存のdatabase.jsonを検索
+            query = f"name='database.json' and '{case_folder_id}' in parents and trashed=false"
+            results = service.files().list(
+                q=query,
+                corpora='drive',
+                driveId=self.case_manager.shared_drive_root_id,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields='files(id, name)',
+                pageSize=1
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            # 一時ファイルに保存
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tmp:
+                json.dump(database, tmp, ensure_ascii=False, indent=2)
+                tmp_path = tmp.name
+            
+            from googleapiclient.http import MediaFileUpload
+            media = MediaFileUpload(tmp_path, mimetype='application/json', resumable=True)
+            
+            if files:
+                # 既存ファイルを更新
+                file_id = files[0]['id']
+                service.files().update(
+                    fileId=file_id,
+                    media_body=media,
+                    supportsAllDrives=True
+                ).execute()
+                logger.info(f"✅ Google Drive上のdatabase.jsonを更新")
+            else:
+                # 新規作成
+                file_metadata = {
+                    'name': 'database.json',
+                    'parents': [case_folder_id],
+                    'mimeType': 'application/json'
+                }
+                service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    supportsAllDrives=True
+                ).execute()
+                logger.info(f"✅ database.jsonをGoogle Driveに新規作成")
+            
+            # 一時ファイルを削除
+            os.remove(tmp_path)
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ database.json更新失敗: {e}")
+            return False
+    
     def load_database(self) -> dict:
-        """database.jsonの読み込み（事件固有）"""
+        """database.jsonの読み込み（Google Drive優先）"""
         if not self.current_case:
             raise ValueError("事件が選択されていません")
         
-        # ローカルのdatabase.jsonを読み込み
-        database_path = "database.json"
+        case_folder_id = self.current_case.get('case_folder_id')
+        if not case_folder_id:
+            raise ValueError("事件フォルダIDが設定されていません")
         
+        # Google Driveから読み込み
+        database = self._download_database_from_gdrive(case_folder_id)
+        
+        if database:
+            return database
+        
+        # フォールバック: ローカルファイル
+        database_path = "database.json"
         if os.path.exists(database_path):
+            logger.warning("⚠️ Google Driveから読み込めなかったため、ローカルファイルを使用")
             with open(database_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        else:
-            # 初期化
-            return {
-                "case_info": {
-                    "case_id": self.current_case['case_id'],
-                    "case_name": self.current_case['case_name'],
-                    "case_folder_id": self.current_case['case_folder_id']
-                },
-                "evidence": [],
-                "metadata": {
-                    "version": "3.0",
-                    "created_at": datetime.now().isoformat(),
-                    "last_updated": datetime.now().isoformat(),
-                    "total_evidence_count": 0,
-                    "completed_count": 0
-                }
-            }
+        
+        # 初期化（新規作成時）
+        logger.info("📝 新規database.jsonを初期化")
+        return {
+            "metadata": {
+                "database_version": "3.0",
+                "case_id": self.current_case['case_id'],
+                "case_name": self.current_case['case_name'],
+                "case_number": "",
+                "created_at": datetime.now().isoformat(),
+                "last_updated": datetime.now().isoformat(),
+                "system_version": "1.0.0"
+            },
+            "case_info": {
+                "case_name": self.current_case['case_name'],
+                "case_number": "",
+                "court": "",
+                "plaintiff": "",
+                "defendant": "",
+                "case_summary": ""
+            },
+            "evidence": [],
+            "phase1_progress": []
+        }
     
     def save_database(self, database: dict):
-        """database.jsonの保存"""
+        """database.jsonの保存（Google Driveに保存）"""
+        if not self.current_case:
+            raise ValueError("事件が選択されていません")
+        
+        case_folder_id = self.current_case.get('case_folder_id')
+        if not case_folder_id:
+            raise ValueError("事件フォルダIDが設定されていません")
+        
+        # メタデータ更新
         database["metadata"]["last_updated"] = datetime.now().isoformat()
         database["metadata"]["total_evidence_count"] = len(database["evidence"])
         database["metadata"]["completed_count"] = len([
             e for e in database["evidence"] if e.get("status") == "completed"
         ])
         
+        # ローカルバックアップ（オプション）
         with open("database.json", 'w', encoding='utf-8') as f:
             json.dump(database, f, ensure_ascii=False, indent=2)
+        logger.info(f"✅ ローカルにdatabase.jsonをバックアップ")
         
-        logger.info(f"✅ database.jsonを保存しました")
+        # Google Driveに保存
+        if self._update_database_on_gdrive(database, case_folder_id):
+            logger.info(f"✅ Google Driveにdatabase.jsonを保存しました")
+        else:
+            logger.warning(f"⚠️ Google Drive保存失敗 - ローカルバックアップのみ")
     
     def display_main_menu(self):
         """メインメニュー表示"""
