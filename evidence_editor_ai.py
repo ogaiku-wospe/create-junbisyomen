@@ -281,7 +281,7 @@ class EvidenceEditorAI:
                 messages=[
                     {
                         "role": "system",
-                        "content": "あなたは法的証拠分析の専門家です。元画像を詳細に精査し、ユーザーの指示に基づいて分析内容を改善します。"
+                        "content": "あなたは中立的な証拠記録の専門家です。元画像を詳細に精査し、ユーザーの指示に基づいて客観的記録を改善します。法的評価や主観的解釈は行わず、観察可能な事実のみを記録してください。"
                     },
                     {
                         "role": "user",
@@ -379,6 +379,11 @@ class EvidenceEditorAI:
 
 【あなたのタスク】
 
+**重要: あなたは中立的な記録者です**
+- 訴訟の当事者や事件の詳細は知らない前提で分析
+- 法的評価や主観的解釈は一切行わない
+- 観察可能な客観的事実のみを記録
+
 **ステップ1: 元画像/文書を詳細に再精査**
 - 提供された画像/文書を高解像度で詳細に観察してください
 - 特にユーザーが指摘した箇所を重点的に確認してください
@@ -408,7 +413,8 @@ class EvidenceEditorAI:
 
 **ステップ3: 関連箇所の整合性確保**
 - 修正に伴い、他のセクションも整合性を保つように更新してください
-- 法的重要性の評価が変わる場合は再評価してください
+- あくまで客観的事実の記録を維持してください
+- 法的評価や主観的解釈は含めないでください
 
 【出力形式（JSON）】
 {{
@@ -439,11 +445,19 @@ class EvidenceEditorAI:
         "parties_mentioned": ["<人物/組織名1>", ...]
       }}
     }},
-    "legal_significance": {{
-      "relevance_to_case": "<修正後の法的関連性>",
-      "key_points": ["<ポイント1>", "<ポイント2>", ...],
-      "credibility_factors": ["<信頼性要因1>", ...],
-      "newly_discovered_info": ["<新たに発見した重要情報>", ...]
+    "objective_analysis": {{
+      "observable_facts": ["<客観的事実1>", "<事実2>", ...],
+      "document_characteristics": "<文書の客観的特徴>",
+      "temporal_information": {{
+        "dates_mentioned": ["<日付1>", "<日付2>", ...],
+        "date_context": "<各日付の文脈>"
+      }},
+      "parties_mentioned": {{
+        "individuals": ["<人物名1>", ...],
+        "organizations": ["<組織名1>", ...],
+        "roles_described": "<文書内での役割記述>"
+      }},
+      "newly_discovered_info": ["<新たに発見した客観的情報>", ...]
     }}
   }},
   "changes_summary": {{

@@ -75,6 +75,27 @@
    - 複数ページの場合、ページ間の関連性
    - 付箋、マーカー、手書きメモの有無
 
+## 📌 Phase 1の重要原則：完全な客観性と中立性
+
+**Phase 1は証拠の客観的記録に特化します。以下を厳守してください：**
+
+### ✅ Phase 1で行うこと（客観的事実記録）
+1. 証拠の内容を客観的・中立的に完全言語化
+2. 観察可能な事実のみを記録
+3. 文書・画像に記載されている情報を正確に抽出
+4. 時系列情報、登場人物、金額などの客観的データを整理
+
+### ❌ Phase 1で行わないこと（主観的評価の排除）
+1. 法的評価や法的意義の判断
+2. 特定の立場（原告・被告）からの解釈
+3. 証拠の有利・不利の判断
+4. 主張戦略や使用方法の提案
+5. 「本件との関連性」などの主観的な関連付け
+
+**重要**: あなたは訴訟の当事者ではなく、中立的な記録者です。
+
+---
+
 ## 出力形式
 以下のJSON形式で出力してください：
 ```json
@@ -84,51 +105,102 @@
   "confidence_score": 0.0-1.0,
   
   "evidence_metadata": {{
-    "証拠の基本情報": "...",
+    "証拠の基本情報": "ファイル名、サイズ、形式等の客観的情報",
     "ファイル情報": "...",
     "作成日時": "...",
-    "作成者": "...",
+    "作成者": "文書に記載されている作成者名（客観的事実）",
     "Google DriveURL": "..."
   }},
   
   "full_content": {{
-    "complete_description": "原文を見なくても完全に理解できる詳細な記述",
+    "complete_description": "証拠の内容を客観的・中立的に完全記述。原文を見なくても完全に理解できる詳細な記述",
     "visual_information": {{
-      "画像の場合": "被写体、背景、色、構図、状態等を完全に記述",
-      "文書の場合": "全文、構造、書式等を完全に記述"
+      "overall_description": "画像全体の客観的説明（被写体、背景、色、構図、状態等）",
+      "key_elements": ["観察される要素1", "要素2", ...],
+      "layout_composition": "レイアウトの客観的説明",
+      "text_in_image": [
+        {{
+          "text": "画像内に記載されているテキスト",
+          "location": "位置（例：右下、左上）",
+          "size": "サイズ（大きい、小さい）",
+          "style": "スタイル（手書き、印刷）"
+        }}
+      ],
+      "background_details": "背景の客観的説明",
+      "quality_notes": "画質、鮮明度の客観的評価"
     }},
     "textual_content": {{
-      "全文": "...",
-      "構造": "...",
-      "重要箇所": "..."
+      "extracted_text": "文書内の全テキストを正確に抽出（一字一句漏らさず）",
+      "text_summary": "テキスト内容の客観的要約",
+      "document_structure": "文書の構造（タイトル、見出し、本文、署名欄等）",
+      "formatting_notes": "書式、フォント、レイアウトの客観的説明"
     }},
     "ocr_results": {{
-      "抽出テキスト": "...",
-      "信頼度": 0.0-1.0
+      "extracted_text": "OCRで抽出された全テキスト",
+      "confidence": 0.0-1.0
     }}
   }},
   
-  "legal_significance": {{
-    "primary_significance": "主要な法的意義",
-    "supporting_facts": ["事実1", "事実2"],
-    "legal_theories": ["法理論1", "法理論2"],
-    "relevance_to_case": "本件との関連性"
+  "objective_analysis": {{
+    "document_type": "文書種類の客観的分類（契約書、メール、領収書等）",
+    "observable_facts": [
+      "証拠から観察できる客観的事実1",
+      "客観的事実2",
+      "客観的事実3"
+    ],
+    "temporal_information": {{
+      "dates_mentioned": ["文書に記載されている日付1", "日付2", ...],
+      "date_context": "各日付の文脈（契約日、作成日、有効期限等）",
+      "timeline": "時系列の客観的整理"
+    }},
+    "parties_mentioned": {{
+      "individuals": ["登場する個人名1", "個人名2", ...],
+      "organizations": ["登場する組織名1", "組織名2", ...],
+      "roles_described": "文書内で各当事者がどのように記述されているか（客観的記録）"
+    }},
+    "financial_information": {{
+      "amounts": ["記載されている金額1", "金額2", ...],
+      "currency": "通貨単位",
+      "amount_context": "各金額の文脈（契約金、支払額、違約金等）"
+    }},
+    "identifiers": {{
+      "contract_numbers": ["契約番号等の識別子"],
+      "reference_numbers": ["参照番号"],
+      "serial_numbers": ["シリアル番号、管理番号等"]
+    }},
+    "signatures_and_seals": {{
+      "signatures": ["署名者名1", "署名者名2", ...],
+      "seals": ["捺印の種類（実印、認印等）"],
+      "signature_dates": ["署名日付"],
+      "signature_locations": "署名・捺印の位置"
+    }},
+    "document_state": {{
+      "completeness": "文書の完全性（完全、一部欠損等）",
+      "modifications": "訂正、削除、追記の有無とその箇所",
+      "annotations": "手書きメモ、マーカー等の有無と内容",
+      "preservation_state": "保存状態（良好、劣化、汚損等）"
+    }}
   }},
   
-  "related_facts": {{
-    "timeline": ["時系列1", "時系列2"],
-    "related_parties": ["関係者1", "関係者2"],
-    "related_evidence": ["関連証拠1", "関連証拠2"]
+  "extracted_data": {{
+    "key_terms": ["文書内の重要用語1", "用語2", ...],
+    "definitions": "文書内で定義されている用語とその定義",
+    "conditions": ["記載されている条件1", "条件2", ...],
+    "obligations": ["記載されている義務1", "義務2", ...],
+    "rights": ["記載されている権利1", "権利2", ...],
+    "exceptions": ["例外規定、但し書き等"]
   }},
   
-  "usage_suggestions": {{
-    "phase2_preparation": "Phase 2での使用方法",
-    "citation_points": ["引用ポイント1", "引用ポイント2"],
-    "argument_strategies": ["主張戦略1", "主張戦略2"]
+  "metadata_analysis": {{
+    "file_properties": "ファイルプロパティから得られる客観的情報",
+    "creation_metadata": "作成日時、更新日時等のメタデータ",
+    "technical_details": "解像度、ファイルサイズ、形式等の技術的詳細"
   }}
 }}
 
 ## 重要事項
 - JSON以外の余分なテキストは含めないでください
 - すべての情報を詳細かつ正確に記述してください
-- 法的観点を常に意識してください
+- **完全に客観的・中立的な記録を心がけてください**
+- **法的評価や主観的解釈は一切含めないでください**
+- 文書に記載されている事実のみを記録してください
