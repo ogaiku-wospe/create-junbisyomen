@@ -44,8 +44,9 @@ Phase 1完全版システムは、証拠ファイル（画像、PDF、Word、動
 
 ### 必須APIキー
 
-- OpenAI API キー（GPT-4o Vision用）
-- Google Drive API 認証情報（推奨）
+- **OpenAI API キー**（GPT-4o Vision用）- プライマリVision API
+- **Anthropic Claude API キー**（推奨）- OpenAI Vision拒否時の高品質フォールバック
+- **Google Drive API 認証情報**（推奨）- 証拠ファイルの自動ダウンロード
 
 ## 🚀 クイックスタート
 

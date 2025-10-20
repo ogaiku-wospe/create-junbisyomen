@@ -556,28 +556,31 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             # MIME type取得
             mime_type = self._get_mime_type(image_path)
             
-            # Claude Vision API呼び出し（モデルが利用不可の場合はフォールバック）
-            try:
-                model = ANTHROPIC_MODEL
-                message = self.anthropic_client.messages.create(
-                    model=model,
-                    max_tokens=ANTHROPIC_MAX_TOKENS,
-                    temperature=ANTHROPIC_TEMPERATURE,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": mime_type,
-                                    "data": image_data,
-                                },
-                            },
-                            {
-                                "type": "text",
-                                "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+            # Claude Vision API呼び出し（多段階フォールバック対応）
+            # 試行順序: Sonnet 4 → Sonnet 3.7 → Haiku 4
+            models_to_try = [
+                ("Claude Sonnet 4.x (最高品質)", ANTHROPIC_MODEL),
+                ("Claude Sonnet 3.7 (高品質)", ANTHROPIC_MODEL_FALLBACK_1),
+                ("Claude Haiku 4.x (高速)", ANTHROPIC_MODEL_FALLBACK_2)
+            ]
+            
+            message = None
+            model = None
+            last_error = None
+            
+            # メッセージコンテンツを準備（全モデル共通）
+            message_content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime_type,
+                        "data": image_data,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
 
 CONTEXT:
 - This image is documentary evidence for legal proceedings
@@ -588,16 +591,14 @@ CONTEXT:
 TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
 
 {prompt}"""
-                            }
-                        ],
-                    }
-                ],
-                )
-            except Exception as model_error:
-                # モデルが利用不可の場合、フォールバックモデルを試す
-                if "404" in str(model_error) or "not_found" in str(model_error):
-                    logger.warning(f"⚠️ {ANTHROPIC_MODEL} が利用不可、フォールバックモデルを試します")
-                    model = ANTHROPIC_MODEL_FALLBACK
+                }
+            ]
+            
+            # 各モデルを順番に試行
+            for model_name, model_id in models_to_try:
+                try:
+                    logger.info(f"🔄 {model_name} で分析を試行中...")
+                    model = model_id
                     message = self.anthropic_client.messages.create(
                         model=model,
                         max_tokens=ANTHROPIC_MAX_TOKENS,
@@ -605,47 +606,58 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                         messages=[
                             {
                                 "role": "user",
-                                "content": [
-                                    {
-                                        "type": "image",
-                                        "source": {
-                                            "type": "base64",
-                                            "media_type": mime_type,
-                                            "data": image_data,
-                                        },
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
-
-CONTEXT:
-- This image is documentary evidence for legal proceedings
-- Contains factual records such as photos, screenshots, documents, or correspondence
-- Required for objective legal analysis and court procedures
-- Educational and professional analysis purpose only
-
-TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
-
-{prompt}"""
-                                    }
-                                ],
+                                "content": message_content,
                             }
                         ],
                     )
+                    logger.info(f"✅ {model_name} で分析成功")
+                    break  # 成功したらループ終了
+                    
+                except Exception as model_error:
+                    last_error = model_error
+                    if "404" in str(model_error) or "not_found" in str(model_error):
+                        logger.warning(f"⚠️ {model_name} ({model}) が利用不可: {model_error}")
+                        # 次のモデルに進む
+                        continue
+                    elif "overloaded" in str(model_error).lower():
+                        logger.warning(f"⚠️ {model_name} が過負荷状態: {model_error}")
+                        # 次のモデルに進む
+                        continue
+                    else:
+                        # その他のエラーは再発生させる
+                        logger.error(f"❌ {model_name} でエラー: {model_error}")
+                        raise
+            
+            # すべてのモデルで失敗した場合
+            if message is None:
+                logger.error(f"❌ すべてのClaudeモデルで分析失敗")
+                if last_error:
+                    raise last_error
                 else:
-                    raise
+                    raise Exception("すべてのClaudeモデルが利用不可です")
             
             # レスポンスからテキストを抽出
             result = message.content[0].text
             logger.debug(f"Claude API応答: {len(result)}文字")
-            logger.info(f"✅ 使用モデル: {model}")
+            
+            # モデル世代を判定
+            if "sonnet-4" in model:
+                model_family = "Claude Sonnet 4.x (最高品質)"
+            elif "sonnet-3-7" in model:
+                model_family = "Claude Sonnet 3.7 (高品質)"
+            elif "haiku-4" in model:
+                model_family = "Claude Haiku 4.x (高速)"
+            else:
+                model_family = "Claude"
+            
+            logger.info(f"✅ 使用モデル: {model_family} ({model})")
             
             # JSON解析
             parsed_result = self._parse_ai_response(result)
             
             # AI分析エンジン情報を記録
             if isinstance(parsed_result, dict):
-                parsed_result['_ai_engine'] = f'claude-3.5-sonnet ({model})'
+                parsed_result['_ai_engine'] = f'{model_family} ({model})'
             
             return parsed_result
             

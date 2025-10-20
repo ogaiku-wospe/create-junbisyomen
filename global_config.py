@@ -85,16 +85,23 @@ DISABLE_CONTENT_POLICY_CHECK = os.getenv("DISABLE_CONTENT_POLICY_CHECK", "true")
 
 # Anthropic Claude API設定（OpenAI Vision API拒否時のフォールバック用）
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet v2 (最新)
-# フォールバックモデル（利用可能なモデル）
-ANTHROPIC_MODEL_FALLBACK = "claude-3-5-sonnet-20240620"  # Claude 3.5 Sonnet v1
-ANTHROPIC_MAX_TOKENS = 16000
+
+# Claude 4.x世代モデル - 最高品質の証拠分析用
+ANTHROPIC_MODEL = "claude-sonnet-4-20250514"  # Claude Sonnet 4.x (最高品質)
+# フォールバックモデル（多段階フォールバック）
+ANTHROPIC_MODEL_FALLBACK_1 = "claude-sonnet-3-7-20250219"  # Claude Sonnet 3.7 (高品質)
+ANTHROPIC_MODEL_FALLBACK_2 = "claude-haiku-4-20250514"  # Claude Haiku 4.x (高速・大容量)
+
+# Vision API設定
+ANTHROPIC_MAX_TOKENS = 8000  # Sonnet 4.xの出力上限に合わせる
 ANTHROPIC_TEMPERATURE = 0.1  # 一貫性重視
 
-# Vision APIフォールバック戦略
-# 1. OpenAI GPT-4o Vision
-# 2. Anthropic Claude 3.5 Sonnet Vision (OpenAI拒否時)
-# 3. OCRテキストベース分析 (両方拒否時)
+# Vision APIフォールバック戦略（4段階）
+# 1. OpenAI GPT-4o Vision (プライマリ)
+# 2. Claude Sonnet 4.x Vision (最高品質セカンダリ) ← NEW!
+# 3. Claude Sonnet 3.7 Vision (高品質ターシャリ) ← NEW!
+# 4. Claude Haiku 4.x Vision (高速フォールバック) ← NEW!
+# 5. OCRテキストベース分析 (最終手段)
 ENABLE_CLAUDE_FALLBACK = os.getenv("ENABLE_CLAUDE_FALLBACK", "true").lower() == "true"
 
 # ================================
