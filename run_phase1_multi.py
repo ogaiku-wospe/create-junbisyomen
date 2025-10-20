@@ -1012,7 +1012,7 @@ class Phase1MultiRunner:
             print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
         
         print("\n【処理内容】")
-        print("  1. 各証拠から作成年月日を取得（既に分析済みならcreation_dateを使用）")
+        print("  1. 各証拠から作成年月日を取得（既に分析済みならdocument_dateを使用）")
         print("  2. 作成年月日順に自動ソート（古い順）")
         print("  3. ソート後の順序で確定番号（ko001, ko002...）を割り当て")
         print("  4. 整理済み_未確定 → 甲号証 フォルダへ移動")
@@ -1035,17 +1035,18 @@ class Phase1MultiRunner:
         for idx, evidence in enumerate(pending_evidence, 1):
             print(f"\n[{idx}/{len(pending_evidence)}] {evidence['temp_id']} - {evidence['original_filename']}")
             
-            # まず、既存のAI分析からcreation_dateを取得
-            creation_date = None
+            # まず、既存のAI分析からdocument_dateを取得
+            document_date = None
             if 'phase1_complete_analysis' in evidence:
                 ai_analysis = evidence['phase1_complete_analysis'].get('ai_analysis', {})
                 obj_analysis = ai_analysis.get('objective_analysis', {})
                 temporal_info = obj_analysis.get('temporal_information', {})
-                creation_date = temporal_info.get('creation_date')
+                # v3.6.2以降: document_date、v3.6.1以前: creation_date（後方互換性）
+                document_date = temporal_info.get('document_date') or temporal_info.get('creation_date')
                 
-                if creation_date:
-                    print(f"  ✅ 既存分析から取得: {creation_date}")
-                    evidence['extracted_date'] = creation_date
+                if document_date:
+                    print(f"  ✅ 既存分析から取得: {document_date}")
+                    evidence['extracted_date'] = document_date
                     continue
             
             # 既存分析がない場合のみ、別途日付抽出を実行
