@@ -48,6 +48,8 @@ CASE_FOLDER_NAME_FORMAT = "{case_id}_{case_name}"
 # 証拠フォルダの標準名
 EVIDENCE_FOLDER_NAME_KO = "甲号証"
 EVIDENCE_FOLDER_NAME_OTSU = "乙号証"
+UNCLASSIFIED_FOLDER_NAME = "未分類"
+PENDING_FOLDER_NAME = "整理済み_未確定"  # 仮番号ファイル用
 DATABASE_FOLDER_NAME = "database"
 TEMP_FOLDER_NAME = "temp"
 LOGS_FOLDER_NAME = "logs"

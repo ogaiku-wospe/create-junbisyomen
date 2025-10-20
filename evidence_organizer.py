@@ -51,6 +51,9 @@ class EvidenceOrganizer:
         
         # 未分類フォルダIDを取得または作成
         self.unclassified_folder_id = self._get_or_create_unclassified_folder()
+        
+        # 整理済み_未確定フォルダIDを取得または作成
+        self.pending_folder_id = self._get_or_create_pending_folder()
     
     def _get_or_create_unclassified_folder(self) -> Optional[str]:
         """未分類フォルダを取得または作成"""
@@ -101,6 +104,56 @@ class EvidenceOrganizer:
             
         except Exception as e:
             print(f"❌ 未分類フォルダの取得・作成エラー: {e}")
+            return None
+    
+    def _get_or_create_pending_folder(self) -> Optional[str]:
+        """整理済み_未確定フォルダを取得または作成"""
+        service = self.case_manager.get_google_drive_service()
+        if not service:
+            return None
+        
+        case_folder_id = self.current_case['case_folder_id']
+        
+        try:
+            # 整理済み_未確定フォルダを検索
+            query = f"'{case_folder_id}' in parents and name='整理済み_未確定' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            
+            results = service.files().list(
+                q=query,
+                corpora='drive',
+                driveId=self.case_manager.shared_drive_root_id,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields='files(id, name, webViewLink)',
+                pageSize=10
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            if files:
+                print(f"✅ 整理済み_未確定フォルダを検出: {files[0]['id']}")
+                return files[0]['id']
+            
+            # 見つからない場合は作成
+            folder_metadata = {
+                'name': '整理済み_未確定',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [case_folder_id]
+            }
+            
+            folder = service.files().create(
+                body=folder_metadata,
+                supportsAllDrives=True,
+                fields='id, name, webViewLink'
+            ).execute()
+            
+            print(f"✅ 整理済み_未確定フォルダを作成: {folder['id']}")
+            print(f"🔗 URL: {folder.get('webViewLink', 'N/A')}")
+            
+            return folder['id']
+            
+        except Exception as e:
+            print(f"❌ 整理済み_未確定フォルダの取得・作成エラー: {e}")
             return None
     
     def detect_unclassified_files(self) -> List[Dict]:
@@ -407,44 +460,83 @@ class EvidenceOrganizer:
         return existing['max'] + 1 if existing['max'] > 0 else 1
     
     def propose_evidence_assignment(self, file_info: Dict, analysis: Dict) -> Dict:
-        """証拠番号の割り当てを提案（既存証拠を考慮）
+        """証拠番号の割り当てを提案（仮番号を使用）
         
         Args:
             file_info: ファイル情報
             analysis: AI分析結果
         
         Returns:
-            提案情報（代替案を含む）
+            提案情報（仮番号付き）
         """
         side = "ko" if analysis['side'] == "plaintiff" else "otsu"
         
-        # 既存証拠を分析して提案
-        suggestion = self.suggest_evidence_number_with_context(side, file_info, analysis)
+        # 整理済み_未確定フォルダ内の仮番号ファイル数を取得
+        temp_number = self._get_next_temp_number()
         
-        # プライマリ提案
-        primary_number = suggestion['primary']['number']
-        evidence_id = f"{side}{primary_number:03d}"
-        evidence_number = f"{'甲' if side == 'ko' else '乙'}{primary_number:03d}"
+        # 仮番号ID
+        temp_id = f"tmp_{temp_number:03d}"
         
         # ファイル名提案
         ext = os.path.splitext(file_info['name'])[1]
-        suggested_filename = f"{evidence_id}_{analysis['suggested_filename']}"
+        suggested_filename = f"{temp_id}_{analysis['suggested_filename']}"
         if not suggested_filename.endswith(ext):
             suggested_filename = os.path.splitext(suggested_filename)[0] + ext
         
         proposal = {
-            "evidence_id": evidence_id,
-            "evidence_number": evidence_number,
+            "temp_id": temp_id,
+            "temp_number": temp_number,
             "suggested_filename": suggested_filename,
             "side": side,
             "evidence_type": analysis['evidence_type'],
             "description": analysis['description'],
             "importance": analysis['importance'],
             "original_filename": file_info['name'],
-            "number_suggestion": suggestion  # 番号提案の詳細
+            "status": "pending"  # 未確定状態
         }
         
         return proposal
+    
+    def _get_next_temp_number(self) -> int:
+        """次の仮番号を取得"""
+        service = self.case_manager.get_google_drive_service()
+        if not service:
+            return 1
+        
+        try:
+            # 整理済み_未確定フォルダ内のファイルを検索
+            query = f"'{self.pending_folder_id}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'"
+            
+            results = service.files().list(
+                q=query,
+                corpora='drive',
+                driveId=self.case_manager.shared_drive_root_id,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields='files(name)',
+                pageSize=1000
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            # 既存の仮番号を抽出
+            temp_numbers = []
+            for file in files:
+                name = file['name']
+                if name.startswith('tmp_'):
+                    try:
+                        # tmp_001_... から数字部分を抽出
+                        num_str = name.split('_')[1]
+                        temp_numbers.append(int(num_str))
+                    except (IndexError, ValueError):
+                        continue
+            
+            # 最大値+1を返す
+            return max(temp_numbers) + 1 if temp_numbers else 1
+            
+        except Exception as e:
+            print(f"❌ 仮番号取得エラー: {e}")
+            return 1
     
     def get_evidence_files_to_renumber(self, side: str, from_number: int) -> List[Dict]:
         """リナンバリング対象の証拠ファイルを取得
@@ -644,15 +736,16 @@ class EvidenceOrganizer:
         else:
             proposal['suggested_filename'] = f"{proposal['evidence_id']}{ext}"
         
-        # ファイルを移動
-        return self.move_file_to_evidence_folder(file_info, proposal)
+        # ファイルを移動（リナンバリング時は甲号証フォルダに直接移動）
+        # TODO: この部分は後で整理済み_未確定フォルダからの移動に変更
+        return self.move_file_to_pending_folder(file_info, proposal)
     
-    def move_file_to_evidence_folder(self, file_info: Dict, proposal: Dict) -> bool:
-        """ファイルを証拠フォルダに移動してリネーム
+    def move_file_to_pending_folder(self, file_info: Dict, proposal: Dict) -> bool:
+        """ファイルを整理済み_未確定フォルダに移動（仮番号付き）
         
         Args:
             file_info: Google Driveファイル情報
-            proposal: 証拠割り当て提案
+            proposal: 証拠割り当て提案（仮番号付き）
         
         Returns:
             成功: True, 失敗: False
@@ -662,15 +755,11 @@ class EvidenceOrganizer:
             return False
         
         try:
-            # 移動先フォルダID
-            target_folder_id = (
-                self.current_case['ko_evidence_folder_id'] 
-                if proposal['side'] == 'ko' 
-                else self.current_case.get('otsu_evidence_folder_id')
-            )
+            # 移動先は整理済み_未確定フォルダ
+            target_folder_id = self.pending_folder_id
             
             if not target_folder_id:
-                print(f"❌ 移動先フォルダが設定されていません")
+                print(f"❌ 整理済み_未確定フォルダが設定されていません")
                 return False
             
             file_id = file_info['id']
@@ -721,15 +810,16 @@ class EvidenceOrganizer:
             with open("database.json", 'r', encoding='utf-8') as f:
                 database = json.load(f)
             
-            # 証拠情報を作成
+            # 証拠情報を作成（仮番号・未確定状態）
             evidence_entry = {
-                "evidence_id": proposal['evidence_id'],
-                "evidence_number": proposal['evidence_number'],
+                "temp_id": proposal['temp_id'],
+                "temp_number": proposal['temp_number'],
                 "original_filename": file_info['name'],
                 "renamed_filename": proposal['suggested_filename'],
                 "evidence_type": proposal['evidence_type'],
                 "description": proposal['description'],
-                "status": "completed",
+                "side": proposal['side'],
+                "status": "pending",  # 未確定状態
                 "created_at": datetime.now().isoformat(),
                 "file_size": int(file_info.get('size', 0)),
                 "gdrive_file_id": file_info['id'],
@@ -752,12 +842,16 @@ class EvidenceOrganizer:
             # evidenceリストに追加（番号順にソート）
             database['evidence'].append(evidence_entry)
             
-            # 証拠番号でソート
+            # 仮番号でソート
             def sort_key(e):
-                eid = e['evidence_id']
-                side = 'ko' if eid.startswith('ko') else 'otsu'
-                number = int(re.search(r'\d+', eid).group()) if re.search(r'\d+', eid) else 999
-                return (0 if side == 'ko' else 1, number)
+                # pendingの場合はtemp_number、confirmedの場合はevidence_idを使用
+                if e.get('status') == 'pending':
+                    return (0, e.get('temp_number', 999))
+                else:
+                    eid = e.get('evidence_id', 'tmp_999')
+                    side = 'ko' if eid.startswith('ko') else 'otsu'
+                    number = int(re.search(r'\d+', eid).group()) if re.search(r'\d+', eid) else 999
+                    return (1 if side == 'ko' else 2, number)
             
             database['evidence'].sort(key=sort_key)
             
@@ -857,7 +951,7 @@ class EvidenceOrganizer:
                             skipped_count += 1
                     else:
                         # 通常の移動
-                        if self.move_file_to_evidence_folder(file_info, proposal):
+                        if self.move_file_to_pending_folder(file_info, proposal):
                             organized_count += 1
                             print(f"✅ 整理完了 ({organized_count}/{len(files)})")
                         else:

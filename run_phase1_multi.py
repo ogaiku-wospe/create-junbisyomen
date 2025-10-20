@@ -238,6 +238,21 @@ class Phase1MultiRunner:
             
             print(f"  ✅ 未分類フォルダ作成")
             
+            # 整理済み_未確定フォルダを作成
+            pending_folder_metadata = {
+                'name': '整理済み_未確定',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [case_folder_id]
+            }
+            
+            pending_folder = service.files().create(
+                body=pending_folder_metadata,
+                supportsAllDrives=True,
+                fields='id, name'
+            ).execute()
+            
+            print(f"  ✅ 整理済み_未確定フォルダ作成")
+            
             # database.jsonを作成
             database = {
                 "metadata": {
