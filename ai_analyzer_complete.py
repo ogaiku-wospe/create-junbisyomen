@@ -305,6 +305,11 @@ class AIAnalyzerComplete:
             elif file_type == 'pdf':
                 # PDFの最初のページを画像化
                 image_path = self._pdf_first_page_to_image(file_path)
+                
+                # PDF変換失敗時はテキスト解析にフォールバック
+                if image_path is None:
+                    logger.warning("PDF→画像変換失敗、テキスト解析にフォールバック")
+                    return self._analyze_with_text(prompt, {'file_path': file_path})
             else:
                 image_path = file_path
             
@@ -378,6 +383,13 @@ class AIAnalyzerComplete:
     def _parse_ai_response(self, response: str) -> Dict:
         """AI応答をパース"""
         try:
+            # デバッグモード時は全レスポンスをログ出力
+            debug_mode = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+            if debug_mode:
+                logger.debug("=== OpenAI生レスポンス開始 ===")
+                logger.debug(response)
+                logger.debug("=== OpenAI生レスポンス終了 ===")
+            
             # JSON抽出
             if "```json" in response:
                 start = response.find("```json") + 7
@@ -392,8 +404,11 @@ class AIAnalyzerComplete:
             
             # 空文字チェック
             if not json_str or not json_str.strip():
-                logger.warning(f"⚠️ 抽出されたJSON文字列が空です")
-                logger.debug(f"Raw response: {response[:500]}...")
+                logger.warning("警告: 抽出されたJSON文字列が空です")
+                if debug_mode:
+                    logger.debug(f"Raw response: {response}")
+                else:
+                    logger.debug(f"Raw response (最初の500文字): {response[:500]}...")
                 return {
                     "raw_response": response,
                     "parse_error": "Empty JSON string",
@@ -405,9 +420,14 @@ class AIAnalyzerComplete:
             return result
             
         except json.JSONDecodeError as e:
-            logger.error(f"❌ JSON解析失敗: {e}")
-            logger.debug(f"Raw response (first 500 chars): {response[:500]}")
-            logger.debug(f"Extracted JSON string: {json_str[:200] if 'json_str' in locals() else 'N/A'}...")
+            logger.error(f"エラー: JSON解析失敗 - {e}")
+            logger.warning(f"抽出したJSON文字列（最初の200文字）: {json_str[:200] if 'json_str' in locals() else 'N/A'}")
+            
+            # デバッグモード時は全レスポンスを出力
+            if debug_mode:
+                logger.debug(f"JSON解析失敗の生レスポンス: {response}")
+            else:
+                logger.debug(f"Raw response (最初の500文字): {response[:500]}")
             
             # フォールバック
             return {
@@ -501,9 +521,47 @@ class AIAnalyzerComplete:
             return quality
     
     def _pdf_first_page_to_image(self, pdf_path: str) -> str:
-        """PDFの最初のページを画像化"""
-        # TODO: pdf2image使用
-        return pdf_path
+        """PDFの最初のページを画像化
+        
+        Args:
+            pdf_path: PDFファイルのパス
+            
+        Returns:
+            変換後の画像ファイルパス、失敗時はNone
+        """
+        try:
+            from pdf2image import convert_from_path
+            
+            logger.info(f"PDF→画像変換開始: {os.path.basename(pdf_path)}")
+            
+            # PDFの1ページ目のみを画像に変換
+            images = convert_from_path(
+                pdf_path, 
+                first_page=1, 
+                last_page=1,
+                dpi=150  # 解像度（高すぎるとファイルサイズ大）
+            )
+            
+            if not images:
+                logger.warning("PDFから画像を抽出できませんでした")
+                return None
+            
+            # 一時ファイルとして保存
+            temp_image_path = pdf_path.replace('.pdf', '_page1.jpg')
+            images[0].save(temp_image_path, 'JPEG', quality=85)
+            
+            logger.info(f"変換成功: {os.path.basename(temp_image_path)}")
+            return temp_image_path
+            
+        except ImportError:
+            logger.error("エラー: pdf2imageライブラリが未インストール")
+            logger.error("  インストール: pip install pdf2image")
+            logger.error("  システム依存: brew install poppler (Mac)")
+            return None
+            
+        except Exception as e:
+            logger.error(f"PDF変換エラー: {e}")
+            return None
     
     def _get_mime_type(self, file_path: str) -> str:
         """MIMEタイプ取得"""
