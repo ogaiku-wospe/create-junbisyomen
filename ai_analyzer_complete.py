@@ -127,7 +127,7 @@ class AIAnalyzerComplete:
                             metadata: Dict,
                             file_content: Dict,
                             case_info: Dict) -> Dict:
-        """AI分析実行"""
+        """AI分析実行（分析メソッド記録付き）"""
         # プロンプト構築
         analysis_prompt = self._build_complete_prompt(
             evidence_id=evidence_id,
@@ -136,30 +136,74 @@ class AIAnalyzerComplete:
             case_info=case_info
         )
         
+        # 分析メソッドの記録用
+        analysis_method_info = {
+            "attempted_method": None,
+            "successful_method": None,
+            "vision_api_used": False,
+            "vision_api_success": False,
+            "vision_api_retry_count": 0,
+            "ocr_fallback_used": False,
+            "ocr_quality": None,
+            "rejection_reason": None
+        }
+        
         # ファイルタイプに応じた分析
         if file_type in ['image', 'pdf', 'document']:
-            # Vision API使用
+            # Vision API使用を試行
+            analysis_method_info["attempted_method"] = "vision_api"
+            analysis_method_info["vision_api_used"] = True
+            
             # HEIC等の変換済みファイルパスを使用
             actual_file_path = file_content.get('processed_file_path', file_path)
             vision_result = self._analyze_with_vision(actual_file_path, analysis_prompt, file_type)
             
             # Vision APIがコンテンツポリシーで拒否した場合、テキストベース分析にフォールバック
             if vision_result is None:
+                analysis_method_info["vision_api_success"] = False
+                analysis_method_info["rejection_reason"] = "content_policy_rejection"
+                analysis_method_info["ocr_fallback_used"] = True
+                
                 logger.info("📝 OCRテキストを使用してテキストベース分析を実行")
                 
                 # OCR品質をチェック
                 ocr_quality = self._assess_ocr_quality(file_content)
+                analysis_method_info["ocr_quality"] = ocr_quality
+                
                 if ocr_quality['is_sufficient']:
                     logger.info(f"✅ OCR品質: {ocr_quality['score']:.0%} - 高品質テキスト抽出")
                 else:
                     logger.warning(f"⚠️ OCR品質: {ocr_quality['score']:.0%} - 低品質だが分析続行")
                 
-                return self._analyze_with_text(analysis_prompt, file_content)
-            
-            return vision_result
+                analysis_method_info["successful_method"] = "ocr_text_analysis"
+                result = self._analyze_with_text(analysis_prompt, file_content)
+                
+                # 分析メソッド情報を結果に追加
+                if isinstance(result, dict):
+                    result['_analysis_method'] = analysis_method_info
+                
+                return result
+            else:
+                analysis_method_info["vision_api_success"] = True
+                analysis_method_info["successful_method"] = "vision_api"
+                
+                # 分析メソッド情報を結果に追加
+                if isinstance(vision_result, dict):
+                    vision_result['_analysis_method'] = analysis_method_info
+                
+                return vision_result
         else:
             # テキストベース分析
-            return self._analyze_with_text(analysis_prompt, file_content)
+            analysis_method_info["attempted_method"] = "text_analysis"
+            analysis_method_info["successful_method"] = "text_analysis"
+            
+            result = self._analyze_with_text(analysis_prompt, file_content)
+            
+            # 分析メソッド情報を結果に追加
+            if isinstance(result, dict):
+                result['_analysis_method'] = analysis_method_info
+            
+            return result
     
     def _build_complete_prompt(self,
                               evidence_id: str,
@@ -361,7 +405,7 @@ class AIAnalyzerComplete:
         
         return '\n'.join(summary_parts)
     
-    def _analyze_with_vision(self, file_path: str, prompt: str, file_type: str, retry_count: int = 0) -> Dict:
+    def _analyze_with_vision(self, file_path: str, prompt: str, file_type: str, retry_count: int = 0, track_retry: bool = True) -> Dict:
         """Vision APIで分析（リトライ機構付き）"""
         try:
             # ファイルタイプに応じた処理
@@ -449,7 +493,7 @@ class AIAnalyzerComplete:
                             logger.warning(f"   拒否メッセージ: {result}")
                             logger.info(f"🔄 コンテキスト情報を追加して再試行します...")
                             time.sleep(1)  # レート制限回避
-                            return self._analyze_with_vision(file_path, prompt, file_type, retry_count + 1)
+                            return self._analyze_with_vision(file_path, prompt, file_type, retry_count + 1, track_retry)
                         else:
                             logger.warning("⚠️ Vision API: 最大リトライ回数に達しました")
                             logger.warning(f"   最終拒否メッセージ: {result}")
@@ -457,7 +501,13 @@ class AIAnalyzerComplete:
                             logger.info("   ヒント: 誤検出の場合は DISABLE_CONTENT_POLICY_CHECK=true で無効化できます")
                             return None  # Noneを返してフォールバック処理を促す
             
-            return self._parse_ai_response(result)
+            parsed_result = self._parse_ai_response(result)
+            
+            # リトライ回数を記録
+            if track_retry and isinstance(parsed_result, dict) and retry_count > 0:
+                parsed_result['_retry_count'] = retry_count
+            
+            return parsed_result
             
         except Exception as e:
             logger.error(f"❌ Vision API分析失敗: {e}")

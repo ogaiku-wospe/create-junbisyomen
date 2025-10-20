@@ -1,0 +1,103 @@
+{
+  "total": 20,
+  "vision_api_attempted": 20,
+  "vision_api_success": 17,
+  "vision_api_failed": 3,
+  "ocr_fallback_used": 3,
+  "text_only": 0,
+  "retry_used": 0,
+  "by_file_type": {
+    "pdf": {
+      "total": 1,
+      "vision_success": 0,
+      "vision_failed": 1,
+      "ocr_fallback": 1
+    },
+    "image": {
+      "total": 19,
+      "vision_success": 17,
+      "vision_failed": 2,
+      "ocr_fallback": 2
+    }
+  },
+  "failures": [
+    {
+      "evidence_id": "tmp_011",
+      "filename": "tmp_011_甲10.pdf",
+      "file_type": "pdf",
+      "method_info": {
+        "attempted_method": "vision_api",
+        "successful_method": "none",
+        "vision_api_used": true,
+        "vision_api_success": false,
+        "vision_api_retry_count": 0,
+        "ocr_fallback_used": true,
+        "ocr_quality": {
+          "score": 0.49,
+          "is_sufficient": true,
+          "details": {
+            "ocr_confidence": 0.49,
+            "text_length": 372
+          }
+        },
+        "rejection_reason": "content_policy_rejection",
+        "_inferred": true
+      },
+      "raw_response": "I'm sorry, I can't assist with that request."
+    },
+    {
+      "evidence_id": "tmp_012",
+      "filename": "tmp_012_甲20_2022年1月_2022-12-26 1.10.57.png",
+      "file_type": "image",
+      "method_info": {
+        "attempted_method": "vision_api",
+        "successful_method": "none",
+        "vision_api_used": true,
+        "vision_api_success": false,
+        "vision_api_retry_count": 0,
+        "ocr_fallback_used": true,
+        "ocr_quality": {
+          "score": 0.22,
+          "is_sufficient": true,
+          "details": {
+            "ocr_confidence": 0.22,
+            "text_length": 227
+          }
+        },
+        "rejection_reason": "content_policy_rejection",
+        "_inferred": true
+      },
+      "raw_response": "I'm sorry, but I can't assist with that request."
+    },
+    {
+      "evidence_id": "tmp_008",
+      "filename": "tmp_008_甲3_2021年8-10月_2022-12-25 19.26.18.png",
+      "file_type": "image",
+      "method_info": {
+        "attempted_method": "vision_api",
+        "successful_method": "none",
+        "vision_api_used": true,
+        "vision_api_success": false,
+        "vision_api_retry_count": 0,
+        "ocr_fallback_used": true,
+        "ocr_quality": {
+          "score": 0.58,
+          "is_sufficient": true,
+          "details": {
+            "ocr_confidence": 0.58,
+            "text_length": 293
+          }
+        },
+        "rejection_reason": "content_policy_rejection",
+        "_inferred": true
+      },
+      "raw_response": "I'm sorry, I can't assist with that."
+    }
+  ],
+  "ocr_quality": {
+    "high": 1,
+    "medium": 1,
+    "low": 1,
+    "unknown": 0
+  }
+}
