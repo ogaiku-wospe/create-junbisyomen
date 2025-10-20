@@ -404,12 +404,29 @@ class AIAnalyzerComplete:
             result = response.choices[0].message.content
             logger.debug(f"API応答: {len(result)}文字")
             
-            # OpenAIのコンテンツポリシー拒否チェック
-            if "I'm sorry, I can't assist with that" in result or "I cannot assist" in result:
-                logger.warning("⚠️ Vision API: コンテンツポリシーにより画像分析が拒否されました")
-                logger.info("📝 OCRテキストを使用したテキストベース分析にフォールバック")
-                # file_pathからfile_contentを取得してテキスト分析
-                return None  # Noneを返してフォールバック処理を促す
+            # デバッグ: APIレスポンスの最初の200文字を表示
+            if result:
+                logger.debug(f"API応答プレビュー: {result[:200]}...")
+            
+            # OpenAIのコンテンツポリシー拒否チェック（より厳密な判定）
+            # 環境変数 DISABLE_CONTENT_POLICY_CHECK=true でチェックを無効化可能
+            disable_check = os.getenv('DISABLE_CONTENT_POLICY_CHECK', 'false').lower() == 'true'
+            
+            if not disable_check:
+                # 真の拒否メッセージの特徴:
+                # 1. 非常に短い（通常100文字未満）
+                # 2. JSON形式ではない
+                # 3. "I'm sorry, I can't assist with that"という完全一致
+                if result and len(result) < 200 and "```" not in result and "{" not in result:
+                    # JSON形式ではない短い応答の場合のみチェック
+                    if "I'm sorry, I can't assist with that" in result or \
+                       "I cannot assist with that request" in result or \
+                       (result.startswith("I'm sorry") and "assist" in result):
+                        logger.warning("⚠️ Vision API: コンテンツポリシーにより画像分析が拒否されました")
+                        logger.warning(f"   拒否メッセージ: {result}")
+                        logger.info("📝 OCRテキストを使用したテキストベース分析にフォールバック")
+                        logger.info("   ヒント: 誤検出の場合は DISABLE_CONTENT_POLICY_CHECK=true で無効化できます")
+                        return None  # Noneを返してフォールバック処理を促す
             
             return self._parse_ai_response(result)
             
