@@ -919,10 +919,11 @@ class Phase1MultiRunner:
         print("="*70)
         
         print(f"\n📁 事件情報:")
-        print(f"  - 事件ID: {database['metadata']['case_id']}")
-        print(f"  - 事件名: {database['metadata']['case_name']}")
-        print(f"  - データベースバージョン: {database['metadata']['database_version']}")
-        print(f"  - 最終更新: {database['metadata']['last_updated']}")
+        metadata = database.get('metadata', {})
+        print(f"  - 事件ID: {metadata.get('case_id', 'N/A')}")
+        print(f"  - 事件名: {metadata.get('case_name', 'N/A')}")
+        print(f"  - データベースバージョン: {metadata.get('database_version', database.get('version', 'N/A'))}")
+        print(f"  - 最終更新: {metadata.get('last_updated', 'N/A')}")
         
         print(f"\n📊 証拠統計:")
         print(f"  - 総証拠数: {len(database['evidence'])}")
@@ -930,14 +931,27 @@ class Phase1MultiRunner:
         completed = [e for e in database['evidence'] if e.get('status') == 'completed']
         print(f"  - 完了: {len(completed)}")
         
+        pending = [e for e in database['evidence'] if e.get('status') == 'pending']
+        print(f"  - 未確定: {len(pending)}")
+        
         in_progress = [e for e in database['evidence'] if e.get('status') == 'in_progress']
         print(f"  - 処理中: {len(in_progress)}")
         
         if database['evidence']:
             print(f"\n📝 証拠一覧:")
             for evidence in database['evidence'][:20]:  # 最大20件表示
-                status_icon = "✅" if evidence.get('status') == 'completed' else "⏳"
-                print(f"  {status_icon} {evidence.get('evidence_number', 'N/A')} - {evidence.get('original_filename', 'N/A')}")
+                status = evidence.get('status', 'unknown')
+                if status == 'completed':
+                    status_icon = "✅"
+                    evidence_id = evidence.get('evidence_number', evidence.get('evidence_id', 'N/A'))
+                elif status == 'pending':
+                    status_icon = "⏳"
+                    evidence_id = evidence.get('temp_id', 'N/A')
+                else:
+                    status_icon = "❓"
+                    evidence_id = 'N/A'
+                
+                print(f"  {status_icon} {evidence_id} - {evidence.get('original_filename', 'N/A')}")
             
             if len(database['evidence']) > 20:
                 print(f"  ... 他 {len(database['evidence']) - 20}件")
