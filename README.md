@@ -81,6 +81,9 @@ nano .env
 **.env の内容:**
 ```
 OPENAI_API_KEY=sk-proj-your-actual-api-key-here
+
+# コンテンツポリシーチェック無効化（工作写真など無害な画像の誤検出を防ぐ）
+DISABLE_CONTENT_POLICY_CHECK=true
 ```
 
 ### 5. Google Drive API 認証情報の配置

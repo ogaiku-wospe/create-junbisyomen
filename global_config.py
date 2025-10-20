@@ -78,6 +78,11 @@ OPENAI_MODEL = "gpt-4o"
 OPENAI_MAX_TOKENS = 16000
 OPENAI_TEMPERATURE = 0.1  # 一貫性重視
 
+# コンテンツポリシーチェック無効化フラグ
+# true: コンテンツポリシーチェックを無効化（誤検出が多い場合に有効化）
+# false: コンテンツポリシーチェックを有効化（デフォルト）
+DISABLE_CONTENT_POLICY_CHECK = os.getenv("DISABLE_CONTENT_POLICY_CHECK", "true").lower() == "true"
+
 # ================================
 # Google Drive URL形式
 # ================================

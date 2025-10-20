@@ -473,8 +473,8 @@ class AIAnalyzerComplete:
                 logger.debug(f"API応答プレビュー: {result[:200]}...")
             
             # OpenAIのコンテンツポリシー拒否チェック（より厳密な判定）
-            # 環境変数 DISABLE_CONTENT_POLICY_CHECK=true でチェックを無効化可能
-            disable_check = os.getenv('DISABLE_CONTENT_POLICY_CHECK', 'false').lower() == 'true'
+            # global_config.pyの DISABLE_CONTENT_POLICY_CHECK または環境変数で無効化可能
+            disable_check = DISABLE_CONTENT_POLICY_CHECK
             
             if not disable_check:
                 # 真の拒否メッセージの特徴:
