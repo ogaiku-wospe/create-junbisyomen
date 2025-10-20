@@ -29,6 +29,7 @@ try:
     from case_manager import CaseManager
     from ai_analyzer_complete import AIAnalyzerComplete
     from metadata_extractor import MetadataExtractor
+    from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
 except ImportError as e:
     print(f"❌ エラー: モジュールのインポートに失敗しました: {e}")
     sys.exit(1)
@@ -48,6 +49,9 @@ class EvidenceOrganizer:
         self.current_case = current_case
         self.ai_analyzer = AIAnalyzerComplete()
         self.metadata_extractor = MetadataExtractor()
+        
+        # Google Drive Database Managerを初期化
+        self.db_manager = create_database_manager(case_manager, current_case)
         
         # 未分類フォルダIDを取得または作成
         self.unclassified_folder_id = self._get_or_create_unclassified_folder()
@@ -155,6 +159,56 @@ class EvidenceOrganizer:
         except Exception as e:
             print(f"❌ 整理済み_未確定フォルダの取得・作成エラー: {e}")
             return None
+    
+    def _load_database_from_gdrive(self) -> Dict:
+        """Google Driveからdatabase.jsonを読み込み
+        
+        Returns:
+            database.jsonの内容、存在しない場合は空の構造を返す
+        """
+        try:
+            if not self.db_manager:
+                return self._get_empty_database()
+            
+            return self.db_manager.load_database()
+            
+        except Exception as e:
+            print(f"⚠️ database.json読み込みエラー: {e}")
+            return self._get_empty_database()
+    
+    def _save_database_to_gdrive(self, database: Dict) -> bool:
+        """Google Drive上のdatabase.jsonを更新
+        
+        Args:
+            database: 保存するdatabase.json内容
+        
+        Returns:
+            成功: True、失敗: False
+        """
+        try:
+            if not self.db_manager:
+                print("❌ データベースマネージャーが初期化されていません")
+                return False
+            
+            return self.db_manager.save_database(database)
+            
+        except Exception as e:
+            print(f"❌ database.json保存エラー: {e}")
+            return False
+    
+    def _get_empty_database(self) -> Dict:
+        """空のdatabase.json構造を返す"""
+        return {
+            "metadata": {
+                "database_version": "3.0",
+                "case_id": self.current_case.get('case_id', ''),
+                "case_name": self.current_case.get('case_name', ''),
+                "created_at": datetime.now().isoformat(),
+                "last_updated": datetime.now().isoformat()
+            },
+            "evidence": [],
+            "phase1_progress": []
+        }
     
     def detect_unclassified_files(self) -> List[Dict]:
         """未分類フォルダからファイルを検出
@@ -336,11 +390,8 @@ class EvidenceOrganizer:
         }
         
         try:
-            if not os.path.exists("database.json"):
-                return result
-            
-            with open("database.json", 'r', encoding='utf-8') as f:
-                database = json.load(f)
+            # Google Driveからdatabase.jsonを読み込み
+            database = self._load_database_from_gdrive()
             
             evidence_list = database.get('evidence', [])
             
@@ -617,9 +668,8 @@ class EvidenceOrganizer:
         if not service:
             return False
         
-        # database.jsonを読み込み
-        with open("database.json", 'r', encoding='utf-8') as f:
-            database = json.load(f)
+        # Google Driveからdatabase.jsonを読み込み
+        database = self._load_database_from_gdrive()
         
         success_count = 0
         
@@ -685,14 +735,15 @@ class EvidenceOrganizer:
                 print(f"  ❌ エラー: {e}")
                 # エラーが発生しても続行
         
-        # database.jsonを保存
+        # Google Driveにdatabase.jsonを保存
         try:
             database['metadata']['last_updated'] = datetime.now().isoformat()
             
-            with open("database.json", 'w', encoding='utf-8') as f:
-                json.dump(database, f, ensure_ascii=False, indent=2)
-            
-            print(f"\n✅ database.json更新完了")
+            if self._save_database_to_gdrive(database):
+                print(f"\n✅ database.json更新完了（Google Drive）")
+            else:
+                print(f"\n❌ database.json保存エラー（Google Drive）")
+                return False
             
         except Exception as e:
             print(f"\n❌ database.json保存エラー: {e}")
@@ -802,13 +853,8 @@ class EvidenceOrganizer:
             成功: True, 失敗: False
         """
         try:
-            # database.jsonを読み込み
-            if not os.path.exists("database.json"):
-                print(f"❌ database.jsonが見つかりません")
-                return False
-            
-            with open("database.json", 'r', encoding='utf-8') as f:
-                database = json.load(f)
+            # Google Driveからdatabase.jsonを読み込み
+            database = self._load_database_from_gdrive()
             
             # 証拠情報を作成（仮番号・未確定状態）
             evidence_entry = {
@@ -858,11 +904,8 @@ class EvidenceOrganizer:
             # メタデータを更新
             database['metadata']['last_updated'] = datetime.now().isoformat()
             
-            # 保存
-            with open("database.json", 'w', encoding='utf-8') as f:
-                json.dump(database, f, ensure_ascii=False, indent=2)
-            
-            return True
+            # Google Driveに保存
+            return self._save_database_to_gdrive(database)
             
         except Exception as e:
             print(f"❌ database.json保存エラー: {e}")

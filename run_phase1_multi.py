@@ -28,6 +28,7 @@ try:
     import global_config as gconfig
     from case_manager import CaseManager
     from evidence_organizer import EvidenceOrganizer
+    from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
     # 既存のモジュール（事件固有の処理）
     from metadata_extractor import MetadataExtractor
     from file_processor import FileProcessor
@@ -62,6 +63,7 @@ class Phase1MultiRunner:
         """初期化"""
         self.case_manager = CaseManager()
         self.current_case = None
+        self.db_manager = None  # 事件選択後に初期化
         self.metadata_extractor = MetadataExtractor()
         self.file_processor = FileProcessor()
         self.ai_analyzer = AIAnalyzerComplete()
@@ -276,16 +278,20 @@ class Phase1MultiRunner:
                 "phase1_progress": []
             }
             
-            # ローカルに一時保存
-            with open('database.json', 'w', encoding='utf-8') as f:
-                json.dump(database, f, ensure_ascii=False, indent=2)
+            # 一時ファイルに保存してGoogle Driveにアップロード
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tmp:
+                json.dump(database, tmp, ensure_ascii=False, indent=2)
+                tmp_path = tmp.name
             
-            # Google Driveにアップロード
-            db_file_id = self._upload_database_to_gdrive('database.json', case_folder_id)
+            db_file_id = self._upload_database_to_gdrive(tmp_path, case_folder_id)
+            os.unlink(tmp_path)  # 一時ファイル削除
+            
             if db_file_id:
                 print(f"  ✅ database.json作成（Google Drive）")
             else:
-                print(f"  ⚠️ database.jsonローカル作成のみ（Google Driveアップロード失敗）")
+                print(f"  ❌ database.jsonのGoogle Driveアップロード失敗")
+                return False
             
             # 事件情報を設定
             self.current_case = {
@@ -475,7 +481,7 @@ class Phase1MultiRunner:
             return False
     
     def load_database(self) -> dict:
-        """database.jsonの読み込み（Google Drive優先）"""
+        """database.jsonの読み込み（Google Driveのみ）"""
         if not self.current_case:
             raise ValueError("事件が選択されていません")
         
@@ -488,13 +494,6 @@ class Phase1MultiRunner:
         
         if database:
             return database
-        
-        # フォールバック: ローカルファイル
-        database_path = "database.json"
-        if os.path.exists(database_path):
-            logger.warning("⚠️ Google Driveから読み込めなかったため、ローカルファイルを使用")
-            with open(database_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
         
         # 初期化（新規作成時）
         logger.info("📝 新規database.jsonを初期化")
@@ -521,7 +520,7 @@ class Phase1MultiRunner:
         }
     
     def save_database(self, database: dict):
-        """database.jsonの保存（Google Driveに保存）"""
+        """database.jsonの保存（Google Driveのみ）"""
         if not self.current_case:
             raise ValueError("事件が選択されていません")
         
@@ -536,16 +535,12 @@ class Phase1MultiRunner:
             e for e in database["evidence"] if e.get("status") == "completed"
         ])
         
-        # ローカルバックアップ（オプション）
-        with open("database.json", 'w', encoding='utf-8') as f:
-            json.dump(database, f, ensure_ascii=False, indent=2)
-        logger.info(f"✅ ローカルにdatabase.jsonをバックアップ")
-        
         # Google Driveに保存
         if self._update_database_on_gdrive(database, case_folder_id):
             logger.info(f"✅ Google Driveにdatabase.jsonを保存しました")
         else:
-            logger.warning(f"⚠️ Google Drive保存失敗 - ローカルバックアップのみ")
+            logger.error(f"❌ Google Drive保存失敗")
+            raise Exception("database.jsonの保存に失敗しました")
     
     def display_main_menu(self):
         """メインメニュー表示"""
