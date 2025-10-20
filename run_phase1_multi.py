@@ -673,7 +673,15 @@ class Phase1MultiRunner:
             for evidence in database.get('evidence', []):
                 # 確定済み証拠の検索
                 if evidence.get('evidence_id') == normalized_number:
+                    # Google DriveファイルIDを取得（複数の場所をチェック）
                     gdrive_file_id = evidence.get('gdrive_file_id')
+                    
+                    # gdrive_file_idがない場合、complete_metadata.gdrive.file_idをチェック
+                    if not gdrive_file_id:
+                        metadata = evidence.get('complete_metadata', {})
+                        gdrive_info = metadata.get('gdrive', {})
+                        gdrive_file_id = gdrive_info.get('file_id')
+                    
                     if not gdrive_file_id:
                         logger.warning(f" 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
                         return None
@@ -694,7 +702,15 @@ class Phase1MultiRunner:
                 
                 # 未確定証拠の検索（temp_id: tmp_001, tmp_002...）
                 if evidence.get('temp_id') == evidence_number:
+                    # Google DriveファイルIDを取得（複数の場所をチェック）
                     gdrive_file_id = evidence.get('gdrive_file_id')
+                    
+                    # gdrive_file_idがない場合、complete_metadata.gdrive.file_idをチェック
+                    if not gdrive_file_id:
+                        metadata = evidence.get('complete_metadata', {})
+                        gdrive_info = metadata.get('gdrive', {})
+                        gdrive_file_id = gdrive_info.get('file_id')
+                    
                     if not gdrive_file_id:
                         logger.warning(f" 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
                         return None
