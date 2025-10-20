@@ -27,6 +27,7 @@ from typing import List, Optional, Dict
 try:
     import global_config as gconfig
     from case_manager import CaseManager
+    from evidence_organizer import EvidenceOrganizer
     # 既存のモジュール（事件固有の処理）
     from metadata_extractor import MetadataExtractor
     from file_processor import FileProcessor
@@ -36,6 +37,7 @@ except ImportError as e:
     print("\n必要なファイル:")
     print("  - global_config.py")
     print("  - case_manager.py")
+    print("  - evidence_organizer.py")
     print("  - metadata_extractor.py")
     print("  - file_processor.py")
     print("  - ai_analyzer_complete.py")
@@ -155,12 +157,13 @@ class Phase1MultiRunner:
         print(f"  📁 事件: {self.current_case['case_name']}")
         print("="*70)
         print("\n【実行モード】")
-        print("  1. 証拠番号を指定して分析（例: ko70）")
-        print("  2. 範囲指定して分析（例: ko70-73）")
-        print("  3. Google Driveから自動検出して分析")
-        print("  4. database.jsonの状態確認")
-        print("  5. 事件を切り替え")
-        print("  6. 終了")
+        print("  1. 🆕 証拠整理（未分類フォルダから自動整理）")
+        print("  2. 証拠番号を指定して分析（例: ko70）")
+        print("  3. 範囲指定して分析（例: ko70-73）")
+        print("  4. Google Driveから自動検出して分析")
+        print("  5. database.jsonの状態確認")
+        print("  6. 事件を切り替え")
+        print("  7. 終了")
         print("-"*70)
     
     def get_evidence_number_input(self) -> Optional[List[str]]:
@@ -413,16 +416,26 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択してください (1-6): ").strip()
+            choice = input("\n選択してください (1-7): ").strip()
             
             if choice == '1':
+                # 🆕 証拠整理（未分類フォルダから自動整理）
+                try:
+                    organizer = EvidenceOrganizer(self.case_manager, self.current_case)
+                    organizer.interactive_organize()
+                except Exception as e:
+                    print(f"\n❌ エラーが発生しました: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                        
+            elif choice == '2':
                 # 証拠番号を指定して分析
                 evidence_numbers = self.get_evidence_number_input()
                 if evidence_numbers:
                     for evidence_number in evidence_numbers:
                         self.process_evidence(evidence_number)
                         
-            elif choice == '2':
+            elif choice == '3':
                 # 範囲指定して分析
                 evidence_numbers = self.get_evidence_number_input()
                 if evidence_numbers:
@@ -432,7 +445,7 @@ class Phase1MultiRunner:
                         for evidence_number in evidence_numbers:
                             self.process_evidence(evidence_number)
                             
-            elif choice == '3':
+            elif choice == '4':
                 # Google Driveから自動検出して分析
                 files = self.search_evidence_files_from_gdrive()
                 if files:
@@ -445,22 +458,22 @@ class Phase1MultiRunner:
                     
                     print("\n⚠️ 自動分析機能は実装中です")
                     
-            elif choice == '4':
+            elif choice == '5':
                 # database.jsonの状態確認
                 self.show_database_status()
                 
-            elif choice == '5':
+            elif choice == '6':
                 # 事件を切り替え
                 if self.select_case():
                     print("\n✅ 事件を切り替えました")
                     
-            elif choice == '6':
+            elif choice == '7':
                 # 終了
                 print("\n👋 Phase 1完全版システムを終了します")
                 break
                 
             else:
-                print("\n❌ 無効な選択です。1-6の番号を入力してください。")
+                print("\n❌ 無効な選択です。1-7の番号を入力してください。")
             
             input("\nEnterキーを押して続行...")
 
