@@ -554,7 +554,7 @@ class Phase1MultiRunner:
             return
         
         print("\n" + "="*70)
-        print(f"  Phase 1完全版システム - 証拠分析")
+        print(f"  Phase 1完全版システム - 証拠管理")
         print(f"  📁 事件: {self.current_case['case_name']}")
         print("="*70)
         print("\n【実行モード】")
@@ -564,7 +564,8 @@ class Phase1MultiRunner:
         print("  4. Google Driveから自動検出して分析")
         print("  5. database.jsonの状態確認")
         print("  6. 事件を切り替え")
-        print("  7. 終了")
+        print("  7. 📋 並び替え・確定（整理済み_未確定 → 甲号証）")
+        print("  8. 終了")
         print("-"*70)
     
     def get_evidence_number_input(self) -> Optional[List[str]]:
@@ -822,6 +823,128 @@ class Phase1MultiRunner:
         
         return 'document'  # デフォルト
     
+    def finalize_pending_evidence(self):
+        """整理済み_未確定の証拠を並び替えて確定"""
+        print("\n" + "="*70)
+        print("  証拠の並び替え・確定")
+        print("="*70)
+        
+        # database.jsonから未確定証拠を取得
+        database = self.load_database()
+        pending_evidence = [e for e in database.get('evidence', []) if e.get('status') == 'pending']
+        
+        if not pending_evidence:
+            print("\n📋 未確定の証拠はありません")
+            return
+        
+        print(f"\n📋 未確定証拠: {len(pending_evidence)}件")
+        print("\n現在の順序:")
+        for idx, evidence in enumerate(pending_evidence, 1):
+            print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
+            print(f"      種別: {evidence['evidence_type']}, 説明: {evidence['description']}")
+        
+        print("\n【操作】")
+        print("  1. この順序で確定（甲001, 甲002...）")
+        print("  2. 順序を変更")
+        print("  0. キャンセル")
+        
+        choice = input("\n選択してください (1-2, 0): ").strip()
+        
+        if choice == '0':
+            print("❌ キャンセルしました")
+            return
+        
+        elif choice == '2':
+            # 順序変更
+            print("\n📝 順序を変更します")
+            print("   例: 1,3,2,4 → 1番目,3番目,2番目,4番目の順")
+            new_order_input = input(f"新しい順序を入力 (1-{len(pending_evidence)}をカンマ区切り): ").strip()
+            
+            try:
+                new_order = [int(x.strip()) for x in new_order_input.split(',')]
+                if len(new_order) != len(pending_evidence) or set(new_order) != set(range(1, len(pending_evidence) + 1)):
+                    print("❌ 無効な順序です")
+                    return
+                
+                # 並び替え
+                pending_evidence = [pending_evidence[i-1] for i in new_order]
+                
+                print("\n✅ 並び替え後:")
+                for idx, evidence in enumerate(pending_evidence, 1):
+                    print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
+                
+            except ValueError:
+                print("❌ 入力エラー")
+                return
+        
+        # 確定確認
+        confirm = input(f"\nこの順序で確定しますか？ (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("❌ キャンセルしました")
+            return
+        
+        # 確定処理
+        print("\n📥 証拠を確定中...")
+        service = self.case_manager.get_google_drive_service()
+        if not service:
+            print("❌ Google Drive認証に失敗しました")
+            return
+        
+        success_count = 0
+        ko_folder_id = self.current_case['ko_evidence_folder_id']
+        
+        # 整理済み_未確定フォルダIDを取得
+        from evidence_organizer import EvidenceOrganizer
+        organizer = EvidenceOrganizer(self.case_manager, self.current_case)
+        pending_folder_id = organizer.pending_folder_id
+        
+        for idx, evidence in enumerate(pending_evidence, 1):
+            ko_number = idx
+            ko_id = f"ko{ko_number:03d}"
+            ko_number_kanji = f"甲{ko_number:03d}"
+            
+            print(f"\n[{idx}/{len(pending_evidence)}] {evidence['temp_id']} → {ko_id}")
+            
+            try:
+                # ファイルを取得
+                file_id = evidence['gdrive_file_id']
+                
+                # 新しいファイル名を生成
+                old_filename = evidence['renamed_filename']
+                # tmp_001_ の部分を ko001_ に置換
+                new_filename = old_filename.replace(evidence['temp_id'], ko_id)
+                
+                # ファイルを移動してリネーム
+                file = service.files().update(
+                    fileId=file_id,
+                    addParents=ko_folder_id,
+                    removeParents=pending_folder_id,
+                    body={'name': new_filename},
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                print(f"  ✅ {new_filename}")
+                
+                # database.jsonの証拠情報を更新
+                evidence['evidence_id'] = ko_id
+                evidence['evidence_number'] = ko_number_kanji
+                evidence['renamed_filename'] = new_filename
+                evidence['status'] = 'completed'
+                evidence['confirmed_at'] = datetime.now().isoformat()
+                
+                success_count += 1
+                
+            except Exception as e:
+                print(f"  ❌ エラー: {e}")
+        
+        # database.jsonを保存
+        self.save_database(database)
+        
+        print("\n" + "="*70)
+        print(f"✅ 確定完了: {success_count}/{len(pending_evidence)}件")
+        print("="*70)
+    
     def show_database_status(self):
         """database.jsonの状態表示"""
         database = self.load_database()
@@ -920,12 +1043,16 @@ class Phase1MultiRunner:
                     print("\n✅ 事件を切り替えました")
                     
             elif choice == '7':
+                # 並び替え・確定
+                self.finalize_pending_evidence()
+                    
+            elif choice == '8':
                 # 終了
                 print("\n👋 Phase 1完全版システムを終了します")
                 break
                 
             else:
-                print("\n❌ 無効な選択です。1-7の番号を入力してください。")
+                print("\n❌ 無効な選択です。1-8の番号を入力してください。")
             
             input("\nEnterキーを押して続行...")
 
