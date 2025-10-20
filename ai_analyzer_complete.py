@@ -430,9 +430,16 @@ class AIAnalyzerComplete:
             
             # 常に法律文書であることを明示（コンテンツポリシー誤検出を防ぐ）
             context_prefix = """
-【重要コンテキスト】
-この画像は民事訴訟における証拠資料です。法律文書、医療記録、SNSスクリーンショット、写真、メッセージ記録など、法的手続きに必要な客観的証拠として提出されます。
-訴訟・法的手続きの目的で、専門的かつ客観的に分析してください。
+IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+
+CONTEXT:
+- This image is documentary evidence for legal proceedings
+- Contains factual records such as photos, screenshots, documents, or correspondence
+- Required for objective legal analysis and court procedures
+- Educational and professional analysis purpose only
+- No harmful, dangerous, or inappropriate content intended
+
+TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
 
 """
             if retry_count > 0:
