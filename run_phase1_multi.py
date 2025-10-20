@@ -525,16 +525,15 @@ class Phase1MultiRunner:
         print(f"  Phase 1完全版システム - 証拠管理")
         print(f"  事件: {self.current_case['case_name']}")
         print("="*70)
-        print("\n実行モード:")
-        print("  1. 証拠整理 (未分類フォルダから自動整理)")
-        print("  2. 証拠番号を指定して分析 (例: ko70)")
-        print("  3. 範囲指定して分析 (例: ko70-73)")
-        print("  4. Google Driveから自動検出して分析")
+        print("\n【証拠の整理・分析】")
+        print("  1. 証拠整理 (未分類フォルダ → 整理済み_未確定)")
+        print("  2. 証拠分析 (番号指定: ko70, tmp_001 / 範囲指定: ko70-73)")
+        print("  3. AI対話形式で分析内容を改善")
+        print("\n【証拠の確定・管理】")
+        print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証)")
+        print("\n【システム管理】")
         print("  5. database.jsonの状態確認")
         print("  6. 事件を切り替え")
-        print("  7. 並び替え・確定 (整理済み_未確定 -> 甲号証)")
-        print("  8. AI分析で日付抽出・自動ソート (未確定証拠)")
-        print("  10. AI対話形式で証拠内容を改善")
         print("  9. 終了")
         print("-"*70)
     
@@ -1013,8 +1012,8 @@ class Phase1MultiRunner:
             print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
         
         print("\n【処理内容】")
-        print("  1. 各証拠からAIで日付情報を抽出")
-        print("  2. 抽出された日付順に自動ソート")
+        print("  1. 各証拠から作成年月日を取得（既に分析済みならcreation_dateを使用）")
+        print("  2. 作成年月日順に自動ソート（古い順）")
         print("  3. ソート後の順序で確定番号（ko001, ko002...）を割り当て")
         print("  4. 整理済み_未確定 → 甲号証 フォルダへ移動")
         
@@ -1023,9 +1022,9 @@ class Phase1MultiRunner:
             print("エラー: キャンセルしました")
             return
         
-        # ステップ1: 日付抽出
+        # ステップ1: 作成年月日の取得
         print("\n" + "="*70)
-        print("  [1/3] 日付抽出中...")
+        print("  [1/3] 作成年月日の取得中...")
         print("="*70)
         
         service = self.case_manager.get_google_drive_service()
@@ -1035,6 +1034,22 @@ class Phase1MultiRunner:
         
         for idx, evidence in enumerate(pending_evidence, 1):
             print(f"\n[{idx}/{len(pending_evidence)}] {evidence['temp_id']} - {evidence['original_filename']}")
+            
+            # まず、既存のAI分析からcreation_dateを取得
+            creation_date = None
+            if 'phase1_complete_analysis' in evidence:
+                ai_analysis = evidence['phase1_complete_analysis'].get('ai_analysis', {})
+                obj_analysis = ai_analysis.get('objective_analysis', {})
+                temporal_info = obj_analysis.get('temporal_information', {})
+                creation_date = temporal_info.get('creation_date')
+                
+                if creation_date:
+                    print(f"  ✅ 既存分析から取得: {creation_date}")
+                    evidence['extracted_date'] = creation_date
+                    continue
+            
+            # 既存分析がない場合のみ、別途日付抽出を実行
+            print(f"  ⚠️ 未分析のため日付抽出を実行...")
             
             try:
                 # Google Driveからファイルをダウンロード
@@ -1061,7 +1076,7 @@ class Phase1MultiRunner:
                 # ファイルタイプを検出
                 file_type = self._detect_file_type(file_path)
                 
-                # 日付抽出
+                # 日付抽出（軽量版）
                 date_result = self.ai_analyzer.extract_date_from_evidence(
                     evidence_id=evidence['temp_id'],
                     file_path=file_path,
@@ -1074,7 +1089,7 @@ class Phase1MultiRunner:
                 evidence['extracted_date'] = date_result.get('primary_date')
                 
                 if evidence['extracted_date']:
-                    print(f"  抽出日付: {evidence['extracted_date']}")
+                    print(f"  📅 抽出日付: {evidence['extracted_date']}")
                 else:
                     print(f"  ⚠️ 日付が抽出できませんでした")
                 
@@ -1082,24 +1097,24 @@ class Phase1MultiRunner:
                 print(f"  ❌ エラー: {e}")
                 evidence['extracted_date'] = None
         
-        # ステップ2: 日付順にソート
+        # ステップ2: 作成年月日順にソート
         print("\n" + "="*70)
-        print("  [2/3] 日付順にソート中...")
+        print("  [2/3] 作成年月日順にソート中...")
         print("="*70)
         
-        # 日付が抽出できたものと抽出できなかったものに分離
+        # 日付が取得できたものと取得できなかったものに分離
         with_date = [e for e in pending_evidence if e.get('extracted_date')]
         without_date = [e for e in pending_evidence if not e.get('extracted_date')]
         
-        # 日付順にソート（古い順）
+        # 作成年月日順にソート（古い順）
         with_date.sort(key=lambda e: e['extracted_date'])
         
         # ソート後の順序（日付あり→日付なし）
         sorted_evidence = with_date + without_date
         
         print(f"\n✅ ソート完了:")
-        print(f"  - 日付抽出成功: {len(with_date)}件")
-        print(f"  - 日付抽出失敗: {len(without_date)}件")
+        print(f"  - 日付取得成功: {len(with_date)}件")
+        print(f"  - 日付取得失敗: {len(without_date)}件")
         
         print("\nソート後の順序:")
         for idx, evidence in enumerate(sorted_evidence, 1):
@@ -1300,10 +1315,10 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択してください (1-10, 9で終了): ").strip()
+            choice = input("\n選択 (1-6, 9=終了): ").strip()
             
             if choice == '1':
-                # 証拠整理（未分類フォルダから自動整理）
+                # 証拠整理（未分類フォルダから整理済み_未確定へ）
                 try:
                     organizer = EvidenceOrganizer(self.case_manager, self.current_case)
                     organizer.interactive_organize()
@@ -1313,36 +1328,38 @@ class Phase1MultiRunner:
                     traceback.print_exc()
                         
             elif choice == '2':
-                # 証拠番号を指定して分析
+                # 証拠分析（番号指定・範囲指定に対応）
                 evidence_numbers = self.get_evidence_number_input()
                 if evidence_numbers:
+                    # 複数件の場合は確認
+                    if len(evidence_numbers) > 1:
+                        print(f"\n処理対象: {', '.join(evidence_numbers)}")
+                        confirm = input("処理を開始しますか？ (y/n): ").strip().lower()
+                        if confirm != 'y':
+                            continue
+                    
+                    # 分析実行
                     for evidence_number in evidence_numbers:
                         gdrive_file_info = self._get_gdrive_info_from_database(evidence_number)
                         self.process_evidence(evidence_number, gdrive_file_info)
                         
             elif choice == '3':
-                # 範囲指定して分析
-                evidence_numbers = self.get_evidence_number_input()
-                if evidence_numbers:
-                    print(f"\n処理対象: {', '.join(evidence_numbers)}")
-                    confirm = input("処理を開始しますか？ (y/n): ").strip().lower()
-                    if confirm == 'y':
-                        for evidence_number in evidence_numbers:
-                            gdrive_file_info = self._get_gdrive_info_from_database(evidence_number)
-                            self.process_evidence(evidence_number, gdrive_file_info)
-                            
+                # AI対話形式で分析内容を改善
+                try:
+                    self.edit_evidence_with_ai()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    
             elif choice == '4':
-                # Google Driveから自動検出して分析
-                files = self.search_evidence_files_from_gdrive()
-                if files:
-                    print(f"\n検出されたファイル: {len(files)}件")
-                    for idx, file_info in enumerate(files[:10], 1):
-                        print(f"  {idx}. {file_info['name']}")
-                    
-                    if len(files) > 10:
-                        print(f"  ... 他 {len(files) - 10}件")
-                    
-                    print("\n⚠️ 自動分析機能は実装中です")
+                # 日付順に並び替えて確定（整理済み_未確定 → 甲号証）
+                try:
+                    self.analyze_and_sort_pending_evidence()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     
             elif choice == '5':
                 # database.jsonの状態確認
@@ -1353,35 +1370,13 @@ class Phase1MultiRunner:
                 if self.select_case():
                     print("\n✅ 事件を切り替えました")
                     
-            elif choice == '7':
-                # 並び替え・確定
-                self.finalize_pending_evidence()
-                    
-            elif choice == '8':
-                # 未確定証拠をAI分析（日付抽出→自動ソート→確定）
-                try:
-                    self.analyze_and_sort_pending_evidence()
-                except Exception as e:
-                    print(f"\nエラー: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                    
-            elif choice == '10':
-                # AI対話形式で証拠内容を改善
-                try:
-                    self.edit_evidence_with_ai()
-                except Exception as e:
-                    print(f"\nエラー: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                    
             elif choice == '9':
                 # 終了
                 print("\nPhase 1完全版システムを終了します")
                 break
                 
             else:
-                print("\nエラー: 無効な選択です。1-10の番号を入力してください（9で終了）。")
+                print("\nエラー: 無効な選択です。1-6または9を入力してください。")
             
             input("\nEnterキーを押して続行...")
 

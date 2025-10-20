@@ -203,7 +203,12 @@ class AIAnalyzerComplete:
 - 法的評価や主観的解釈は一切含めない
 - 訴訟の当事者や事件の詳細は知らない前提で分析
 - あなたは中立的な記録者として振る舞う
-- **日付情報（temporal_information）は必ず詳細に抽出してください**
+
+**🗓️ 最重要タスク - 証拠の作成年月日を必ず特定:**
+- `document_date`: 証拠説明書に記載する作成年月日（YYYY-MM-DD形式）
+- 文書上部の日付、EXIF撮影日時、ファイル名の日付など、あらゆる手がかりから判断
+- `document_date_source`に根拠を明記（例：「文書上部に2021年8月15日と記載」）
+- 日付が不明な場合も、その旨と理由を`date_confidence`に記載
 
 **出力形式: JSON**
 
@@ -252,10 +257,13 @@ class AIAnalyzerComplete:
       "客観的事実2"
     ],
     "temporal_information": {{
-      "dates_mentioned": ["日付1（YYYY-MM-DD形式推奨）", "日付2"],
-      "date_context": "各日付の文脈を明確に記載",
+      "document_date": "証拠の作成年月日（YYYY-MM-DD形式必須）※証拠説明書記載用",
+      "document_date_source": "作成日の根拠（文書上部の日付、EXIF撮影日時、ファイル名等）",
+      "other_dates": [
+        {{"date": "YYYY-MM-DD", "context": "この日付の意味（例：有効期限、支払期限等）"}}
+      ],
       "timeline": "時系列の客観的整理",
-      "primary_date": "証拠の代表日付（YYYY-MM-DD形式）"
+      "date_confidence": "作成年月日の信頼度（high/medium/low）と理由"
     }},
     "parties_mentioned": {{
       "individuals": ["個人名1", "個人名2"],
