@@ -117,6 +117,11 @@ class Phase1MultiRunner:
         
         self.current_case = selected_case
         
+        # データベースマネージャーを初期化
+        self.db_manager = create_database_manager(self.case_manager, selected_case)
+        if not self.db_manager:
+            logger.warning("⚠️ データベースマネージャーの初期化に失敗しました")
+        
         # 事件設定ファイルを生成
         self.case_manager.generate_case_config(selected_case, "current_case.json")
         
@@ -255,42 +260,31 @@ class Phase1MultiRunner:
             
             print(f"  ✅ 整理済み_未確定フォルダ作成")
             
-            # database.jsonを作成
-            database = {
-                "metadata": {
-                    "database_version": "3.0",
-                    "case_id": case_id,
-                    "case_name": case_name,
-                    "case_number": case_number or "",
-                    "created_at": datetime.now().isoformat(),
-                    "last_updated": datetime.now().isoformat(),
-                    "system_version": "1.0.0"
-                },
-                "case_info": {
+            # 事件情報を一時設定（database作成のため）
+            temp_case_info = {
+                'case_id': case_id,
+                'case_name': case_name,
+                'case_folder_id': case_folder_id
+            }
+            
+            # データベースマネージャーを初期化してdatabase.jsonを作成
+            temp_db_manager = create_database_manager(self.case_manager, temp_case_info)
+            if temp_db_manager:
+                # 空のdatabase.jsonがGoogle Driveに作成される
+                database = temp_db_manager.load_database()
+                # case_infoを追加
+                database['case_info'] = {
                     "case_name": case_name,
                     "case_number": case_number or "",
                     "court": court or "",
                     "plaintiff": plaintiff or "",
                     "defendant": defendant or "",
                     "case_summary": ""
-                },
-                "evidence": [],
-                "phase1_progress": []
-            }
-            
-            # 一時ファイルに保存してGoogle Driveにアップロード
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tmp:
-                json.dump(database, tmp, ensure_ascii=False, indent=2)
-                tmp_path = tmp.name
-            
-            db_file_id = self._upload_database_to_gdrive(tmp_path, case_folder_id)
-            os.unlink(tmp_path)  # 一時ファイル削除
-            
-            if db_file_id:
+                }
+                temp_db_manager.save_database(database)
                 print(f"  ✅ database.json作成（Google Drive）")
             else:
-                print(f"  ❌ database.jsonのGoogle Driveアップロード失敗")
+                print(f"  ❌ database.json作成に失敗")
                 return False
             
             # 事件情報を設定
@@ -302,6 +296,11 @@ class Phase1MultiRunner:
                 'otsu_evidence_folder_id': otsu_folder['id'],
                 'case_folder_url': case_folder.get('webViewLink', '')
             }
+            
+            # データベースマネージャーを初期化
+            self.db_manager = create_database_manager(self.case_manager, self.current_case)
+            if not self.db_manager:
+                logger.warning("⚠️ データベースマネージャーの初期化に失敗しました")
             
             # 事件設定ファイルを生成
             self.case_manager.generate_case_config(self.current_case, "current_case.json")
@@ -485,48 +484,19 @@ class Phase1MultiRunner:
         if not self.current_case:
             raise ValueError("事件が選択されていません")
         
-        case_folder_id = self.current_case.get('case_folder_id')
-        if not case_folder_id:
-            raise ValueError("事件フォルダIDが設定されていません")
+        if not self.db_manager:
+            raise ValueError("データベースマネージャーが初期化されていません")
         
         # Google Driveから読み込み
-        database = self._download_database_from_gdrive(case_folder_id)
-        
-        if database:
-            return database
-        
-        # 初期化（新規作成時）
-        logger.info("📝 新規database.jsonを初期化")
-        return {
-            "metadata": {
-                "database_version": "3.0",
-                "case_id": self.current_case['case_id'],
-                "case_name": self.current_case['case_name'],
-                "case_number": "",
-                "created_at": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
-                "system_version": "1.0.0"
-            },
-            "case_info": {
-                "case_name": self.current_case['case_name'],
-                "case_number": "",
-                "court": "",
-                "plaintiff": "",
-                "defendant": "",
-                "case_summary": ""
-            },
-            "evidence": [],
-            "phase1_progress": []
-        }
+        return self.db_manager.load_database()
     
     def save_database(self, database: dict):
         """database.jsonの保存（Google Driveのみ）"""
         if not self.current_case:
             raise ValueError("事件が選択されていません")
         
-        case_folder_id = self.current_case.get('case_folder_id')
-        if not case_folder_id:
-            raise ValueError("事件フォルダIDが設定されていません")
+        if not self.db_manager:
+            raise ValueError("データベースマネージャーが初期化されていません")
         
         # メタデータ更新
         database["metadata"]["last_updated"] = datetime.now().isoformat()
@@ -536,7 +506,7 @@ class Phase1MultiRunner:
         ])
         
         # Google Driveに保存
-        if self._update_database_on_gdrive(database, case_folder_id):
+        if self.db_manager.save_database(database):
             logger.info(f"✅ Google Driveにdatabase.jsonを保存しました")
         else:
             logger.error(f"❌ Google Drive保存失敗")
