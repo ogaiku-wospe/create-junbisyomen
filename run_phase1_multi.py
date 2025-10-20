@@ -800,15 +800,25 @@ class Phase1MultiRunner:
             }
             
             # 既存のエントリを更新、または新規追加
+            # temp_id, evidence_id, evidence_number のいずれかでマッチング
             existing_index = next(
                 (i for i, e in enumerate(database["evidence"]) 
-                 if e.get("evidence_id") == evidence_number),
+                 if (e.get("evidence_id") == evidence_number or
+                     e.get("temp_id") == evidence_number or
+                     e.get("evidence_number") == evidence_number)),
                 None
             )
             
             if existing_index is not None:
+                # 既存エントリのtemp_idを保持
+                old_entry = database["evidence"][existing_index]
+                if 'temp_id' in old_entry:
+                    evidence_entry['temp_id'] = old_entry['temp_id']
+                if 'temp_number' in old_entry:
+                    evidence_entry['temp_number'] = old_entry['temp_number']
+                
                 database["evidence"][existing_index] = evidence_entry
-                logger.info(f"  ✅ 既存エントリを更新しました")
+                logger.info(f"  ✅ 既存エントリを更新しました（temp_id: {old_entry.get('temp_id')}）")
             else:
                 database["evidence"].append(evidence_entry)
                 logger.info(f"  ✅ 新規エントリを追加しました")

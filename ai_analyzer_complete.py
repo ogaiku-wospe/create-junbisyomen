@@ -105,6 +105,27 @@ class AIAnalyzerComplete:
                 ai_analysis=ai_analysis
             )
             
+            # ステップ4.5: ファイル名から日付を抽出（フォールバック）
+            if 'objective_analysis' in structured_result:
+                temporal_info = structured_result['objective_analysis'].get('temporal_information', {})
+                document_date = temporal_info.get('document_date')
+                
+                # document_dateが不明または空の場合、ファイル名から抽出を試みる
+                if not document_date or document_date == '不明' or document_date == '':
+                    filename = metadata.get('file_name', '')
+                    filename_date = self._extract_date_from_filename(filename)
+                    
+                    if filename_date:
+                        temporal_info['document_date'] = filename_date
+                        temporal_info['document_date_source'] = "ファイル名から抽出"
+                        
+                        # date_confidenceを更新
+                        if 'date_confidence' not in temporal_info or temporal_info['date_confidence'] == 'none':
+                            temporal_info['date_confidence'] = "medium - ファイル名に基づく推定"
+                        
+                        logger.info(f"📅 ファイル名から日付を抽出: {filename_date}")
+                        structured_result['objective_analysis']['temporal_information'] = temporal_info
+            
             # ステップ5: 品質評価
             logger.info("✅ [5/5] 品質評価")
             quality_score = self._assess_analysis_quality(structured_result)
@@ -583,6 +604,42 @@ class AIAnalyzerComplete:
         except Exception as e:
             logger.error(f"❌ 品質評価失敗: {e}")
             return quality
+    
+    def _extract_date_from_filename(self, filename: str) -> Optional[str]:
+        """ファイル名から日付を抽出
+        
+        Args:
+            filename: ファイル名
+            
+        Returns:
+            YYYY-MM-DD形式の日付、見つからない場合はNone
+        """
+        import re
+        
+        # パターン1: YYYY-MM-DD, YYYY_MM_DD, YYYY.MM.DD
+        pattern1 = r'(\d{4})[-_.](\d{1,2})[-_.](\d{1,2})'
+        match = re.search(pattern1, filename)
+        if match:
+            year, month, day = match.groups()
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        
+        # パターン2: YYYYMMDD
+        pattern2 = r'(\d{4})(\d{2})(\d{2})'
+        match = re.search(pattern2, filename)
+        if match:
+            year, month, day = match.groups()
+            # 月と日が妥当な範囲かチェック
+            if 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                return f"{year}-{month}-{day}"
+        
+        # パターン3: YYYY年MM月DD日
+        pattern3 = r'(\d{4})年(\d{1,2})月(\d{1,2})日'
+        match = re.search(pattern3, filename)
+        if match:
+            year, month, day = match.groups()
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        
+        return None
     
     def _pdf_first_page_to_image(self, file_path: str) -> str:
         """PDF/Word文書の最初のページを画像化
