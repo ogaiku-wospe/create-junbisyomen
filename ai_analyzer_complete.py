@@ -352,13 +352,13 @@ class AIAnalyzerComplete:
             # ファイルタイプに応じた処理
             if file_type == 'image':
                 image_path = file_path
-            elif file_type == 'pdf':
-                # PDFの最初のページを画像化
+            elif file_type in ['pdf', 'document']:
+                # PDFまたはWord文書の最初のページを画像化
                 image_path = self._pdf_first_page_to_image(file_path)
                 
                 # PDF変換失敗時はテキスト解析にフォールバック
                 if image_path is None:
-                    logger.warning("PDF→画像変換失敗、テキスト解析にフォールバック")
+                    logger.warning(f"{file_type}→画像変換失敗、テキスト解析にフォールバック")
                     return self._analyze_with_text(prompt, {'file_path': file_path})
             else:
                 image_path = file_path
@@ -570,38 +570,81 @@ class AIAnalyzerComplete:
             logger.error(f"❌ 品質評価失敗: {e}")
             return quality
     
-    def _pdf_first_page_to_image(self, pdf_path: str) -> str:
-        """PDFの最初のページを画像化
+    def _pdf_first_page_to_image(self, file_path: str) -> str:
+        """PDF/Word文書の最初のページを画像化
         
         Args:
-            pdf_path: PDFファイルのパス
+            file_path: PDF/Wordファイルのパス
             
         Returns:
             変換後の画像ファイルパス、失敗時はNone
         """
         try:
-            from pdf2image import convert_from_path
+            # ファイル拡張子を確認
+            file_ext = os.path.splitext(file_path)[1].lower()
             
-            logger.info(f"PDF→画像変換開始: {os.path.basename(pdf_path)}")
+            # Word文書の場合はPDFに変換してから画像化
+            if file_ext in ['.doc', '.docx']:
+                logger.info(f"Word→PDF→画像変換開始: {os.path.basename(file_path)}")
+                
+                # Word→PDF変換（LibreOffice使用）
+                try:
+                    import subprocess
+                    temp_dir = os.path.dirname(file_path)
+                    
+                    # LibreOfficeでPDFに変換
+                    subprocess.run([
+                        'soffice',
+                        '--headless',
+                        '--convert-to', 'pdf',
+                        '--outdir', temp_dir,
+                        file_path
+                    ], check=True, capture_output=True, timeout=30)
+                    
+                    # 変換されたPDFパス
+                    pdf_path = file_path.rsplit('.', 1)[0] + '.pdf'
+                    
+                    if not os.path.exists(pdf_path):
+                        logger.warning("Word→PDF変換に失敗しました")
+                        return None
+                    
+                    # PDFを使用して画像変換を続行
+                    file_path = pdf_path
+                    file_ext = '.pdf'
+                    
+                except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    logger.warning(f"Word→PDF変換失敗: {e}")
+                    logger.warning("  LibreOfficeが未インストールの可能性があります")
+                    logger.warning("  インストール: brew install libreoffice (Mac)")
+                    return None
             
-            # PDFの1ページ目のみを画像に変換
-            images = convert_from_path(
-                pdf_path, 
-                first_page=1, 
-                last_page=1,
-                dpi=150  # 解像度（高すぎるとファイルサイズ大）
-            )
-            
-            if not images:
-                logger.warning("PDFから画像を抽出できませんでした")
+            # PDFを画像に変換
+            if file_ext == '.pdf':
+                from pdf2image import convert_from_path
+                
+                logger.info(f"PDF→画像変換開始: {os.path.basename(file_path)}")
+                
+                # PDFの1ページ目のみを画像に変換
+                images = convert_from_path(
+                    file_path, 
+                    first_page=1, 
+                    last_page=1,
+                    dpi=150  # 解像度（高すぎるとファイルサイズ大）
+                )
+                
+                if not images:
+                    logger.warning("PDFから画像を抽出できませんでした")
+                    return None
+                
+                # 一時ファイルとして保存
+                temp_image_path = file_path.replace('.pdf', '_page1.jpg')
+                images[0].save(temp_image_path, 'JPEG', quality=85)
+                
+                logger.info(f"変換成功: {os.path.basename(temp_image_path)}")
+                return temp_image_path
+            else:
+                logger.warning(f"サポートされていないファイル形式: {file_ext}")
                 return None
-            
-            # 一時ファイルとして保存
-            temp_image_path = pdf_path.replace('.pdf', '_page1.jpg')
-            images[0].save(temp_image_path, 'JPEG', quality=85)
-            
-            logger.info(f"変換成功: {os.path.basename(temp_image_path)}")
-            return temp_image_path
             
         except ImportError:
             logger.error("エラー: pdf2imageライブラリが未インストール")
@@ -610,7 +653,7 @@ class AIAnalyzerComplete:
             return None
             
         except Exception as e:
-            logger.error(f"PDF変換エラー: {e}")
+            logger.error(f"文書変換エラー: {e}")
             return None
     
     def _get_mime_type(self, file_path: str) -> str:

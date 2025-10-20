@@ -96,10 +96,15 @@ SUPPORTED_FORMATS = {
         'extensions': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic', '.heif', '.tiff', '.tif'],
         'mime_types': ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp', 'image/heic', 'image/heif', 'image/tiff']
     },
-    # 文書形式
+    # PDF形式（独立カテゴリ - Vision APIでの処理が必要）
+    'pdf': {
+        'extensions': ['.pdf'],
+        'mime_types': ['application/pdf']
+    },
+    # 文書形式（Word等）
     'document': {
-        'extensions': ['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt'],
-        'mime_types': ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']
+        'extensions': ['.docx', '.doc', '.odt', '.rtf', '.txt'],
+        'mime_types': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']
     },
     # スプレッドシート形式
     'spreadsheet': {
