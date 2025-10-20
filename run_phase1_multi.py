@@ -530,7 +530,8 @@ class Phase1MultiRunner:
         print("  5. database.jsonの状態確認")
         print("  6. 事件を切り替え")
         print("  7. 📋 並び替え・確定（整理済み_未確定 → 甲号証）")
-        print("  8. 終了")
+        print("  8. 📅 未確定証拠をAI分析（日付抽出→自動ソート→確定）")
+        print("  9. 終了")
         print("-"*70)
     
     def get_evidence_number_input(self) -> Optional[List[str]]:
@@ -966,6 +967,189 @@ class Phase1MultiRunner:
         print(f"✅ 確定完了: {success_count}/{len(pending_evidence)}件")
         print("="*70)
     
+    def analyze_and_sort_pending_evidence(self):
+        """未確定証拠をAI分析→日付抽出→自動ソート→確定"""
+        print("\n" + "="*70)
+        print("  未確定証拠の分析・日付抽出・自動ソート")
+        print("="*70)
+        
+        # database.jsonから未確定証拠を取得
+        database = self.load_database()
+        pending_evidence = [e for e in database.get('evidence', []) if e.get('status') == 'pending']
+        
+        if not pending_evidence:
+            print("\n📋 未確定の証拠はありません")
+            return
+        
+        print(f"\n📋 未確定証拠: {len(pending_evidence)}件")
+        print("\n現在の順序:")
+        for idx, evidence in enumerate(pending_evidence, 1):
+            print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
+        
+        print("\n【処理内容】")
+        print("  1. 各証拠からAIで日付情報を抽出")
+        print("  2. 抽出された日付順に自動ソート")
+        print("  3. ソート後の順序で確定番号（ko001, ko002...）を割り当て")
+        print("  4. 整理済み_未確定 → 甲号証 フォルダへ移動")
+        
+        confirm = input("\n処理を開始しますか？ (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("❌ キャンセルしました")
+            return
+        
+        # ステップ1: 日付抽出
+        print("\n" + "="*70)
+        print("  [1/3] 日付抽出中...")
+        print("="*70)
+        
+        service = self.case_manager.get_google_drive_service()
+        if not service:
+            print("❌ Google Drive認証に失敗しました")
+            return
+        
+        for idx, evidence in enumerate(pending_evidence, 1):
+            print(f"\n[{idx}/{len(pending_evidence)}] {evidence['temp_id']} - {evidence['original_filename']}")
+            
+            try:
+                # Google Driveからファイルをダウンロード
+                gdrive_file_id = evidence.get('gdrive_file_id')
+                if not gdrive_file_id:
+                    print(f"  ⚠️ Google DriveファイルIDが見つかりません")
+                    evidence['extracted_date'] = None
+                    continue
+                
+                # ファイル情報を取得
+                file_info = service.files().get(
+                    fileId=gdrive_file_id,
+                    supportsAllDrives=True,
+                    fields='id, name, mimeType'
+                ).execute()
+                
+                # ファイルをダウンロード
+                file_path = self._download_file_from_gdrive(file_info)
+                if not file_path:
+                    print(f"  ⚠️ ファイルのダウンロードに失敗しました")
+                    evidence['extracted_date'] = None
+                    continue
+                
+                # ファイルタイプを検出
+                file_type = self._detect_file_type(file_path)
+                
+                # 日付抽出
+                date_result = self.ai_analyzer.extract_date_from_evidence(
+                    evidence_id=evidence['temp_id'],
+                    file_path=file_path,
+                    file_type=file_type,
+                    original_filename=evidence['original_filename']
+                )
+                
+                # 結果を証拠情報に追加
+                evidence['date_extraction'] = date_result
+                evidence['extracted_date'] = date_result.get('primary_date')
+                
+                if evidence['extracted_date']:
+                    print(f"  📅 抽出日付: {evidence['extracted_date']}")
+                else:
+                    print(f"  ⚠️ 日付が抽出できませんでした")
+                
+            except Exception as e:
+                print(f"  ❌ エラー: {e}")
+                evidence['extracted_date'] = None
+        
+        # ステップ2: 日付順にソート
+        print("\n" + "="*70)
+        print("  [2/3] 日付順にソート中...")
+        print("="*70)
+        
+        # 日付が抽出できたものと抽出できなかったものに分離
+        with_date = [e for e in pending_evidence if e.get('extracted_date')]
+        without_date = [e for e in pending_evidence if not e.get('extracted_date')]
+        
+        # 日付順にソート（古い順）
+        with_date.sort(key=lambda e: e['extracted_date'])
+        
+        # ソート後の順序（日付あり→日付なし）
+        sorted_evidence = with_date + without_date
+        
+        print(f"\n✅ ソート完了:")
+        print(f"  - 日付抽出成功: {len(with_date)}件")
+        print(f"  - 日付抽出失敗: {len(without_date)}件")
+        
+        print("\n📅 ソート後の順序:")
+        for idx, evidence in enumerate(sorted_evidence, 1):
+            date_str = evidence.get('extracted_date', '日付なし')
+            print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']} ({date_str})")
+        
+        # ステップ3: 確定番号割り当て・移動
+        print("\n" + "="*70)
+        print("  [3/3] 確定番号を割り当て中...")
+        print("="*70)
+        
+        confirm_finalize = input("\nこの順序で確定しますか？ (y/n): ").strip().lower()
+        if confirm_finalize != 'y':
+            print("❌ キャンセルしました（日付抽出結果はdatabase.jsonに保存されました）")
+            self.save_database(database)
+            return
+        
+        success_count = 0
+        ko_folder_id = self.current_case['ko_evidence_folder_id']
+        
+        # 整理済み_未確定フォルダIDを取得
+        from evidence_organizer import EvidenceOrganizer
+        organizer = EvidenceOrganizer(self.case_manager, self.current_case)
+        pending_folder_id = organizer.pending_folder_id
+        
+        for idx, evidence in enumerate(sorted_evidence, 1):
+            ko_number = idx
+            ko_id = f"ko{ko_number:03d}"
+            ko_number_kanji = f"甲{ko_number:03d}"
+            
+            print(f"\n[{idx}/{len(sorted_evidence)}] {evidence['temp_id']} → {ko_id}")
+            date_str = evidence.get('extracted_date', '日付なし')
+            print(f"  📅 日付: {date_str}")
+            
+            try:
+                # ファイルを取得
+                file_id = evidence['gdrive_file_id']
+                
+                # 新しいファイル名を生成
+                old_filename = evidence['renamed_filename']
+                # tmp_001_ の部分を ko001_ に置換
+                new_filename = old_filename.replace(evidence['temp_id'], ko_id)
+                
+                # ファイルを移動してリネーム
+                file = service.files().update(
+                    fileId=file_id,
+                    addParents=ko_folder_id,
+                    removeParents=pending_folder_id,
+                    body={'name': new_filename},
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                print(f"  ✅ {new_filename}")
+                
+                # database.jsonの証拠情報を更新
+                evidence['evidence_id'] = ko_id
+                evidence['evidence_number'] = ko_number_kanji
+                evidence['renamed_filename'] = new_filename
+                evidence['status'] = 'completed'
+                evidence['confirmed_at'] = datetime.now().isoformat()
+                evidence['sorted_by_date'] = True  # 日付ソートで確定したことを記録
+                
+                success_count += 1
+                
+            except Exception as e:
+                print(f"  ❌ エラー: {e}")
+        
+        # database.jsonを保存
+        self.save_database(database)
+        
+        print("\n" + "="*70)
+        print(f"✅ 確定完了: {success_count}/{len(sorted_evidence)}件")
+        print(f"📅 日付順ソート: {len(with_date)}件")
+        print("="*70)
+    
     def show_database_status(self):
         """database.jsonの状態表示"""
         database = self.load_database()
@@ -1024,7 +1208,7 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択してください (1-7): ").strip()
+            choice = input("\n選択してください (1-9): ").strip()
             
             if choice == '1':
                 # 🆕 証拠整理（未分類フォルダから自動整理）
@@ -1082,12 +1266,21 @@ class Phase1MultiRunner:
                 self.finalize_pending_evidence()
                     
             elif choice == '8':
+                # 📅 未確定証拠をAI分析（日付抽出→自動ソート→確定）
+                try:
+                    self.analyze_and_sort_pending_evidence()
+                except Exception as e:
+                    print(f"\n❌ エラーが発生しました: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    
+            elif choice == '9':
                 # 終了
                 print("\n👋 Phase 1完全版システムを終了します")
                 break
                 
             else:
-                print("\n❌ 無効な選択です。1-8の番号を入力してください。")
+                print("\n❌ 無効な選択です。1-9の番号を入力してください。")
             
             input("\nEnterキーを押して続行...")
 

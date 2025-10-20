@@ -517,6 +517,94 @@ class AIAnalyzerComplete:
         }
         return mime_types.get(ext, 'image/jpeg')
 
+    def extract_date_from_evidence(self, 
+                                   evidence_id: str,
+                                   file_path: str,
+                                   file_type: str,
+                                   original_filename: str) -> Dict:
+        """
+        証拠から日付情報を抽出（軽量版AI分析）
+        
+        Args:
+            evidence_id: 証拠ID（例: tmp_001）
+            file_path: ファイルパス
+            file_type: ファイルタイプ
+            original_filename: 元のファイル名
+        
+        Returns:
+            日付抽出結果 {
+                "evidence_id": str,
+                "extracted_dates": [{"date": "YYYY-MM-DD", "confidence": float, "context": str}],
+                "primary_date": "YYYY-MM-DD" or None,
+                "date_source": "content" | "filename" | "metadata" | "unknown"
+            }
+        """
+        logger.info(f"📅 日付抽出開始: {evidence_id} - {original_filename}")
+        
+        try:
+            # 日付抽出用プロンプト
+            date_prompt = f"""
+以下の証拠から日付情報を抽出してください。
+
+証拠ID: {evidence_id}
+ファイル名: {original_filename}
+
+【抽出指示】
+1. 証拠内容から日付を抽出
+2. ファイル名から日付を抽出
+3. メタデータから日付を抽出
+4. 各日付について、信頼度（0.0-1.0）とコンテキスト（どこに記載されているか）を記録
+5. 最も信頼できる「主要日付」を1つ選択
+
+【出力形式: JSON】
+{{
+  "evidence_id": "{evidence_id}",
+  "extracted_dates": [
+    {{
+      "date": "YYYY-MM-DD",
+      "confidence": 0.0-1.0,
+      "context": "証拠本文の作成日付として記載",
+      "source": "content" | "filename" | "metadata"
+    }}
+  ],
+  "primary_date": "YYYY-MM-DD" or null,
+  "date_source": "content" | "filename" | "metadata" | "unknown",
+  "extraction_notes": "日付抽出に関する補足"
+}}
+
+**重要**: JSON以外の余分なテキストは含めないでください。
+"""
+            
+            # ファイルタイプに応じた分析
+            if file_type in ['image', 'pdf', 'document']:
+                # Vision API使用
+                result = self._analyze_with_vision(file_path, date_prompt, file_type)
+            else:
+                # テキストベース分析
+                result = self._analyze_with_text(date_prompt, {})
+            
+            logger.info(f"✅ 日付抽出完了: {evidence_id}")
+            
+            # 主要日付をログ出力
+            primary_date = result.get('primary_date')
+            if primary_date:
+                logger.info(f"   主要日付: {primary_date}")
+            else:
+                logger.warning(f"   ⚠️ 日付が抽出できませんでした")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ 日付抽出失敗: {evidence_id} - {e}")
+            # エラー時はデフォルト値を返す
+            return {
+                "evidence_id": evidence_id,
+                "extracted_dates": [],
+                "primary_date": None,
+                "date_source": "unknown",
+                "extraction_error": str(e)
+            }
+
     def analyze_complete(self, processed_data: Dict, evidence_number: str) -> Dict:
         """
         analyze_evidence_complete の後方互換エイリアス
