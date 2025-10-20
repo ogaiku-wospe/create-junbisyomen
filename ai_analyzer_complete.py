@@ -390,13 +390,24 @@ class AIAnalyzerComplete:
             else:
                 json_str = response
             
+            # 空文字チェック
+            if not json_str or not json_str.strip():
+                logger.warning(f"⚠️ 抽出されたJSON文字列が空です")
+                logger.debug(f"Raw response: {response[:500]}...")
+                return {
+                    "raw_response": response,
+                    "parse_error": "Empty JSON string",
+                    "verbalization_level": 0
+                }
+            
             # JSON解析
             result = json.loads(json_str)
             return result
             
         except json.JSONDecodeError as e:
             logger.error(f"❌ JSON解析失敗: {e}")
-            logger.debug(f"Raw response: {response[:500]}...")
+            logger.debug(f"Raw response (first 500 chars): {response[:500]}")
+            logger.debug(f"Extracted JSON string: {json_str[:200] if 'json_str' in locals() else 'N/A'}...")
             
             # フォールバック
             return {

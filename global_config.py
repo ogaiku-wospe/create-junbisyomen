@@ -167,6 +167,14 @@ QUALITY_THRESHOLDS = {
     'metadata_coverage': 95.0
 }
 
+# エイリアス（後方互換性のため）
+QUALITY_CHECK_THRESHOLDS = {
+    'completeness': 90.0,
+    'confidence': 80.0,
+    'verbalization': 4,
+    'metadata': 95.0
+}
+
 # ================================
 # ローカルパス設定
 # ================================
