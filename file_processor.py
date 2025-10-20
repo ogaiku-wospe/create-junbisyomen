@@ -18,8 +18,16 @@ from pathlib import Path
 try:
     from PIL import Image
     PILLOW_AVAILABLE = True
+    # HEIC対応
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+        HEIF_AVAILABLE = True
+    except ImportError:
+        HEIF_AVAILABLE = False
 except ImportError:
     PILLOW_AVAILABLE = False
+    HEIF_AVAILABLE = False
 
 # PDF処理
 try:
@@ -168,13 +176,19 @@ class FileProcessor:
                 f"{Path(heic_path).stem}_converted.jpg"
             )
             
-            # PIL での変換
+            # PIL + pillow-heif での変換
             if PILLOW_AVAILABLE:
+                if not HEIF_AVAILABLE:
+                    logger.warning("⚠️ pillow-heif未インストール - HEIC形式を開けません")
+                    logger.info("💡 インストール: pip install pillow-heif")
+                    return heic_path
+                
                 with Image.open(heic_path) as img:
+                    # RGBに変換（HEIC特有のカラープロファイル対応）
                     rgb_img = img.convert('RGB')
                     rgb_img.save(output_path, 'JPEG', quality=95)
                 
-                logger.info(f"✅ HEIC変換完了: {output_path}")
+                logger.info(f"✅ HEIC→JPEG変換完了: {output_path}")
                 return output_path
             else:
                 logger.warning("⚠️ PIL未インストール - HEIC変換スキップ")
@@ -182,6 +196,8 @@ class FileProcessor:
                 
         except Exception as e:
             logger.error(f"❌ HEIC変換失敗: {e}")
+            import traceback
+            traceback.print_exc()
             return heic_path
     
     def _perform_ocr(self, image_path: str) -> Dict:
