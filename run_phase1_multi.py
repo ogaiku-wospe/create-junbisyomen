@@ -630,7 +630,7 @@ class Phase1MultiRunner:
         """database.jsonから証拠のGoogle Drive情報を取得
         
         Args:
-            evidence_number: 証拠番号（例: ko001, 甲001）
+            evidence_number: 証拠番号（例: ko001, 甲001, tmp_001）
         
         Returns:
             Google Driveファイル情報（見つからない場合はNone）
@@ -639,15 +639,39 @@ class Phase1MultiRunner:
             database = self.load_database()
             
             # 証拠番号を正規化（ko001, 甲001 → ko001で統一）
+            normalized_number = evidence_number
             if evidence_number.startswith('甲'):
-                evidence_number = f"ko{evidence_number[1:]}"
+                normalized_number = f"ko{evidence_number[1:]}"
             elif evidence_number.startswith('乙'):
-                evidence_number = f"otsu{evidence_number[1:]}"
+                normalized_number = f"otsu{evidence_number[1:]}"
             
             # データベースから証拠を検索
+            # 1. evidence_id で検索（確定済み証拠: ko001, ko002...）
+            # 2. temp_id で検索（未確定証拠: tmp_001, tmp_002...）
             for evidence in database.get('evidence', []):
-                if evidence.get('evidence_id') == evidence_number:
-                    # Google DriveファイルIDを取得
+                # 確定済み証拠の検索
+                if evidence.get('evidence_id') == normalized_number:
+                    gdrive_file_id = evidence.get('gdrive_file_id')
+                    if not gdrive_file_id:
+                        logger.warning(f"⚠️ 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
+                        return None
+                    
+                    # Google Drive APIでファイル情報を取得
+                    service = self.case_manager.get_google_drive_service()
+                    if not service:
+                        logger.error("❌ Google Drive認証に失敗しました")
+                        return None
+                    
+                    file_info = service.files().get(
+                        fileId=gdrive_file_id,
+                        supportsAllDrives=True,
+                        fields='id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink'
+                    ).execute()
+                    
+                    return file_info
+                
+                # 未確定証拠の検索（temp_id: tmp_001, tmp_002...）
+                if evidence.get('temp_id') == evidence_number:
                     gdrive_file_id = evidence.get('gdrive_file_id')
                     if not gdrive_file_id:
                         logger.warning(f"⚠️ 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
