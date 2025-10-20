@@ -1,5 +1,6 @@
 # Phase 1完全版システム - 必須パッケージ
 openai>=1.6.1
+anthropic>=0.39.0
 google-auth>=2.23.0
 google-auth-oauthlib>=1.1.0
 google-auth-httplib2>=0.1.1

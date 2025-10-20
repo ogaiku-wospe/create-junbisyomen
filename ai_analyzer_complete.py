@@ -20,6 +20,14 @@ from metadata_extractor import MetadataExtractor
 
 logger = logging.getLogger(__name__)
 
+# Anthropic Claudeのインポート（オプショナル）
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    logger.warning("⚠️ anthropicパッケージが未インストール - Claude フォールバックは無効です")
+
 
 class AIAnalyzerComplete:
     """完全版AI分析エンジン"""
@@ -32,6 +40,15 @@ class AIAnalyzerComplete:
         
         openai.api_key = self.api_key
         self.client = openai.OpenAI(api_key=self.api_key)
+        
+        # Anthropic Claudeクライアントの初期化（オプショナル）
+        self.anthropic_client = None
+        if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY and ENABLE_CLAUDE_FALLBACK:
+            try:
+                self.anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                logger.info("✅ Anthropic Claude Vision APIフォールバックを有効化")
+            except Exception as e:
+                logger.warning(f"⚠️ Claude初期化失敗: {e}")
         
         self.prompt_template = self._load_prompt(prompt_path or LOCAL_PROMPT_PATH)
         self.file_processor = FileProcessor()
@@ -478,7 +495,7 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                 logger.debug(f"API応答プレビュー: {result[:200]}...")
             
             # OpenAIのコンテンツポリシー拒否チェック
-            # Vision APIが拒否した場合は、常にOCRフォールバックに切り替える
+            # Vision APIが拒否した場合、Claude → OCRの順でフォールバック
             # 拒否メッセージの特徴:
             # 1. 非常に短い（通常100文字未満）
             # 2. JSON形式ではない
@@ -488,9 +505,22 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                    "I cannot assist with that request" in result or \
                    (result.startswith("I'm sorry") and "assist" in result):
                     
-                    logger.warning(f"⚠️ Vision API: コンテンツポリシーで拒否されました")
+                    logger.warning(f"⚠️ OpenAI Vision API: コンテンツポリシーで拒否されました")
                     logger.warning(f"   拒否メッセージ: {result}")
-                    logger.info("📝 即座にOCRテキストベース分析にフォールバックします")
+                    
+                    # Claude Vision APIにフォールバック
+                    if self.anthropic_client:
+                        logger.info("🔄 Anthropic Claude Vision APIにフォールバックします")
+                        try:
+                            claude_result = self._analyze_with_claude(image_path, prompt)
+                            if claude_result:
+                                logger.info("✅ Claude Vision APIで分析成功")
+                                return claude_result
+                        except Exception as e:
+                            logger.warning(f"⚠️ Claude Vision API失敗: {e}")
+                    
+                    # OCRテキストベース分析にフォールバック
+                    logger.info("📝 OCRテキストベース分析にフォールバックします")
                     return None  # Noneを返してフォールバック処理を促す
             
             parsed_result = self._parse_ai_response(result)
@@ -504,6 +534,80 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
         except Exception as e:
             logger.error(f"❌ Vision API分析失敗: {e}")
             raise
+    
+    def _analyze_with_claude(self, image_path: str, prompt: str) -> Optional[Dict]:
+        """Anthropic Claude Vision APIで分析
+        
+        Args:
+            image_path: 画像ファイルパス
+            prompt: 分析プロンプト
+            
+        Returns:
+            分析結果（失敗時はNone）
+        """
+        try:
+            if not self.anthropic_client:
+                return None
+            
+            # Base64エンコード
+            with open(image_path, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            # MIME type取得
+            mime_type = self._get_mime_type(image_path)
+            
+            # Claude Vision API呼び出し
+            message = self.anthropic_client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=ANTHROPIC_MAX_TOKENS,
+                temperature=ANTHROPIC_TEMPERATURE,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": mime_type,
+                                    "data": image_data,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+
+CONTEXT:
+- This image is documentary evidence for legal proceedings
+- Contains factual records such as photos, screenshots, documents, or correspondence
+- Required for objective legal analysis and court procedures
+- Educational and professional analysis purpose only
+
+TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
+
+{prompt}"""
+                            }
+                        ],
+                    }
+                ],
+            )
+            
+            # レスポンスからテキストを抽出
+            result = message.content[0].text
+            logger.debug(f"Claude API応答: {len(result)}文字")
+            
+            # JSON解析
+            parsed_result = self._parse_ai_response(result)
+            
+            # AI分析エンジン情報を記録
+            if isinstance(parsed_result, dict):
+                parsed_result['_ai_engine'] = 'claude-3.5-sonnet'
+            
+            return parsed_result
+            
+        except Exception as e:
+            logger.error(f"❌ Claude Vision API分析失敗: {e}")
+            return None
     
     def _analyze_with_text(self, prompt: str, file_content: Dict) -> Dict:
         """テキストベース分析"""

@@ -82,8 +82,14 @@ nano .env
 ```
 OPENAI_API_KEY=sk-proj-your-actual-api-key-here
 
+# Anthropic Claude API（OpenAI Vision拒否時の自動フォールバック用）
+ANTHROPIC_API_KEY=sk-ant-your-actual-api-key-here
+
 # コンテンツポリシーチェック無効化（工作写真など無害な画像の誤検出を防ぐ）
 DISABLE_CONTENT_POLICY_CHECK=true
+
+# Claude Vision APIフォールバックを有効化
+ENABLE_CLAUDE_FALLBACK=true
 ```
 
 ### 5. Google Drive API 認証情報の配置
