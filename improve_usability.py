@@ -74,4 +74,21 @@ def improve_usability(filepath):
     print(f"  バックアップ: {filepath}.backup")
 
 if __name__ == '__main__':
-    improve_usability('/home/user/create-junbisyomen/run_phase1_multi.py')
+    import os
+    import sys
+    
+    # コマンドライン引数でファイルパスを指定可能
+    if len(sys.argv) > 1:
+        filepath = sys.argv[1]
+    else:
+        # スクリプトと同じディレクトリのrun_phase1_multi.pyを対象
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        filepath = os.path.join(script_dir, 'run_phase1_multi.py')
+    
+    if not os.path.exists(filepath):
+        print(f"エラー: ファイルが見つかりません: {filepath}")
+        print(f"\n使用方法: python3 {sys.argv[0]} [ファイルパス]")
+        sys.exit(1)
+    
+    print(f"対象ファイル: {filepath}")
+    improve_usability(filepath)

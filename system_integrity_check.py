@@ -243,7 +243,17 @@ class SystemIntegrityChecker:
 
 
 def main():
-    project_dir = '/home/user/create-junbisyomen'
+    # スクリプトが実行されているディレクトリを自動検出
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # コマンドライン引数でディレクトリを指定可能
+    if len(sys.argv) > 1:
+        project_dir = sys.argv[1]
+    else:
+        project_dir = script_dir
+    
+    print(f"チェック対象ディレクトリ: {project_dir}\n")
+    
     checker = SystemIntegrityChecker(project_dir)
     
     success = checker.run()
