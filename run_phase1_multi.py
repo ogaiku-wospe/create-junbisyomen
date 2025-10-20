@@ -34,7 +34,7 @@ try:
     from file_processor import FileProcessor
     from ai_analyzer_complete import AIAnalyzerComplete
 except ImportError as e:
-    print(f"❌ エラー: モジュールのインポートに失敗しました: {e}")
+    print(f"エラー: エラー: モジュールのインポートに失敗しました: {e}")
     print("\n必要なファイル:")
     print("  - global_config.py")
     print("  - case_manager.py")
@@ -82,7 +82,7 @@ class Phase1MultiRunner:
         cases = self.case_manager.detect_cases()
         
         if not cases:
-            print("\n📋 事件が見つかりませんでした。")
+            print("\n事件が見つかりませんでした。")
             print("\n【選択してください】")
             print("  1. 新規事件を作成")
             print("  2. 終了")
@@ -120,7 +120,7 @@ class Phase1MultiRunner:
         # データベースマネージャーを初期化
         self.db_manager = create_database_manager(self.case_manager, selected_case)
         if not self.db_manager:
-            logger.warning("⚠️ データベースマネージャーの初期化に失敗しました")
+            logger.warning(" データベースマネージャーの初期化に失敗しました")
         
         # 事件設定ファイルを生成
         self.case_manager.generate_case_config(selected_case, "current_case.json")
@@ -139,16 +139,16 @@ class Phase1MultiRunner:
         
         try:
             # 事件情報を入力
-            print("\n📝 事件情報を入力してください")
+            print("\n事件情報を入力してください")
             
             case_id = input("\n事件ID（例: 2025_001）: ").strip()
             if not case_id:
-                print("❌ 事件IDは必須です")
+                print("エラー: 事件IDは必須です")
                 return False
             
             case_name = input("事件名（例: 損害賠償請求事件）: ").strip()
             if not case_name:
-                print("❌ 事件名は必須です")
+                print("エラー: 事件名は必須です")
                 return False
             
             case_number = input("事件番号（例: 令和7年(ワ)第1号）[省略可]: ").strip()
@@ -157,7 +157,7 @@ class Phase1MultiRunner:
             defendant = input("被告（例: 株式会社〇〇）[省略可]: ").strip()
             
             # 確認
-            print("\n📋 入力内容の確認:")
+            print("\n入力内容の確認:")
             print(f"  事件ID: {case_id}")
             print(f"  事件名: {case_name}")
             if case_number:
@@ -171,15 +171,15 @@ class Phase1MultiRunner:
             
             confirm = input("\nこの内容で作成しますか？ (y/n): ").strip().lower()
             if confirm != 'y':
-                print("❌ キャンセルしました")
+                print("エラー: キャンセルしました")
                 return False
             
             # フォルダ作成
-            print("\n📁 フォルダを作成中...")
+            print("\nフォルダを作成中...")
             
             service = self.case_manager.get_google_drive_service()
             if not service:
-                print("❌ Google Drive認証に失敗しました")
+                print("エラー: Google Drive認証に失敗しました")
                 return False
             
             # 事件フォルダを作成
@@ -300,13 +300,13 @@ class Phase1MultiRunner:
             # データベースマネージャーを初期化
             self.db_manager = create_database_manager(self.case_manager, self.current_case)
             if not self.db_manager:
-                logger.warning("⚠️ データベースマネージャーの初期化に失敗しました")
+                logger.warning(" データベースマネージャーの初期化に失敗しました")
             
             # 事件設定ファイルを生成
             self.case_manager.generate_case_config(self.current_case, "current_case.json")
             
             print("\n✅ 新規事件を作成しました")
-            print(f"📁 フォルダURL: {case_folder.get('webViewLink', 'N/A')}")
+            print(f" フォルダURL: {case_folder.get('webViewLink', 'N/A')}")
             
             return True
             
@@ -348,11 +348,11 @@ class Phase1MultiRunner:
                 fields='id, name'
             ).execute()
             
-            logger.info(f"✅ database.jsonをGoogle Driveにアップロード: {file['id']}")
+            logger.info(f" database.jsonをGoogle Driveにアップロード: {file['id']}")
             return file['id']
             
         except Exception as e:
-            logger.error(f"❌ database.jsonアップロード失敗: {e}")
+            logger.error(f" database.jsonアップロード失敗: {e}")
             return None
     
     def _download_database_from_gdrive(self, case_folder_id: str) -> Optional[Dict]:
@@ -383,7 +383,7 @@ class Phase1MultiRunner:
             
             files = results.get('files', [])
             if not files:
-                logger.warning("⚠️ Google Driveにdatabase.jsonが見つかりません")
+                logger.warning(" Google Driveにdatabase.jsonが見つかりません")
                 return None
             
             file_id = files[0]['id']
@@ -403,11 +403,11 @@ class Phase1MultiRunner:
             fh.seek(0)
             database = json.loads(fh.read().decode('utf-8'))
             
-            logger.info(f"✅ database.jsonをGoogle Driveからダウンロード")
+            logger.info(f" database.jsonをGoogle Driveからダウンロード")
             return database
             
         except Exception as e:
-            logger.error(f"❌ database.jsonダウンロード失敗: {e}")
+            logger.error(f" database.jsonダウンロード失敗: {e}")
             return None
     
     def _update_database_on_gdrive(self, database: Dict, case_folder_id: str) -> bool:
@@ -456,7 +456,7 @@ class Phase1MultiRunner:
                     media_body=media,
                     supportsAllDrives=True
                 ).execute()
-                logger.info(f"✅ Google Drive上のdatabase.jsonを更新")
+                logger.info(f" Google Drive上のdatabase.jsonを更新")
             else:
                 # 新規作成
                 file_metadata = {
@@ -469,14 +469,14 @@ class Phase1MultiRunner:
                     media_body=media,
                     supportsAllDrives=True
                 ).execute()
-                logger.info(f"✅ database.jsonをGoogle Driveに新規作成")
+                logger.info(f" database.jsonをGoogle Driveに新規作成")
             
             # 一時ファイルを削除
             os.remove(tmp_path)
             return True
             
         except Exception as e:
-            logger.error(f"❌ database.json更新失敗: {e}")
+            logger.error(f" database.json更新失敗: {e}")
             return False
     
     def load_database(self) -> dict:
@@ -507,9 +507,9 @@ class Phase1MultiRunner:
         
         # Google Driveに保存
         if self.db_manager.save_database(database):
-            logger.info(f"✅ Google Driveにdatabase.jsonを保存しました")
+            logger.info(f" Google Driveにdatabase.jsonを保存しました")
         else:
-            logger.error(f"❌ Google Drive保存失敗")
+            logger.error(f" Google Drive保存失敗")
             raise Exception("database.jsonの保存に失敗しました")
     
     def display_main_menu(self):
@@ -520,17 +520,17 @@ class Phase1MultiRunner:
         
         print("\n" + "="*70)
         print(f"  Phase 1完全版システム - 証拠管理")
-        print(f"  📁 事件: {self.current_case['case_name']}")
+        print(f"  事件: {self.current_case['case_name']}")
         print("="*70)
-        print("\n【実行モード】")
-        print("  1. 🆕 証拠整理（未分類フォルダから自動整理）")
-        print("  2. 証拠番号を指定して分析（例: ko70）")
-        print("  3. 範囲指定して分析（例: ko70-73）")
+        print("\n実行モード:")
+        print("  1. 証拠整理 (未分類フォルダから自動整理)")
+        print("  2. 証拠番号を指定して分析 (例: ko70)")
+        print("  3. 範囲指定して分析 (例: ko70-73)")
         print("  4. Google Driveから自動検出して分析")
         print("  5. database.jsonの状態確認")
         print("  6. 事件を切り替え")
-        print("  7. 📋 並び替え・確定（整理済み_未確定 → 甲号証）")
-        print("  8. 📅 未確定証拠をAI分析（日付抽出→自動ソート→確定）")
+        print("  7. 並び替え・確定 (整理済み_未確定 -> 甲号証)")
+        print("  8. AI分析で日付抽出・自動ソート (未確定証拠)")
         print("  9. 終了")
         print("-"*70)
     
@@ -542,7 +542,11 @@ class Phase1MultiRunner:
             ko001-005    -> ['ko001', 'ko002', 'ko003', 'ko004', 'ko005']
             tmp_001-011  -> ['tmp_001', 'tmp_002', ..., 'tmp_011']
         """
-        user_input = input("\n証拠番号を入力してください（例: ko70 または ko70-73, tmp_001-011）: ").strip()
+        print("\n証拠番号の入力")
+        print("  単一指定: ko70, tmp_001")
+        print("  範囲指定: ko70-73, tmp_001-011")
+        print("  キャンセル: 空Enter")
+        user_input = input("\n> ").strip()
         
         if not user_input:
             return None
@@ -559,7 +563,10 @@ class Phase1MultiRunner:
                 import re
                 match = re.match(r'^(.+?)(\d+)$', start_str)
                 if not match:
-                    logger.error("❌ 範囲指定の形式が正しくありません（開始番号）")
+                    logger.error("範囲指定の形式が正しくありません（開始番号）")
+                    print("\nエラー: 範囲指定の形式が正しくありません")
+                    print("  正しい例: ko001-005, tmp_001-011")
+                    print(f"  入力値: {user_input}")
                     return None
                 
                 prefix = match.group(1)  # "tmp_" or "ko"
@@ -570,7 +577,15 @@ class Phase1MultiRunner:
                 end_num = int(end_str)
                 
                 if start_num > end_num:
-                    logger.error("❌ 開始番号は終了番号以下でなければなりません")
+                    logger.error("開始番号は終了番号以下でなければなりません")
+                    print(f"\nエラー: 開始番号({start_num})が終了番号({end_num})より大きいです")
+                    return None
+                
+                # 範囲が大きすぎないかチェック
+                range_size = end_num - start_num + 1
+                if range_size > 100:
+                    print(f"\nエラー: 範囲が大きすぎます({range_size}件)")
+                    print("  一度に処理できるのは100件までです")
                     return None
                 
                 # ゼロ埋めの桁数を判定（開始番号の桁数を維持）
@@ -581,7 +596,10 @@ class Phase1MultiRunner:
                 return [f"{prefix}{i:0{width}d}" for i in range(start_num, end_num + 1)]
                 
             except ValueError as e:
-                logger.error(f"❌ 範囲指定の形式が正しくありません: {e}")
+                logger.error(f"範囲指定の形式が正しくありません: {e}")
+                print("\nエラー: 範囲指定の形式が正しくありません")
+                print("  正しい例: ko001-005, tmp_001-011")
+                print(f"  詳細: {e}")
                 return None
         else:
             # 単一証拠番号
@@ -594,14 +612,14 @@ class Phase1MultiRunner:
             検出された証拠ファイルのリスト
         """
         if not self.current_case or not self.current_case.get('ko_evidence_folder_id'):
-            logger.error("❌ 甲号証フォルダIDが設定されていません")
+            logger.error(" 甲号証フォルダIDが設定されていません")
             return []
         
-        print("\n🔍 Google Driveから証拠ファイルを検索中...")
+        print("\nGoogle Driveから証拠ファイルを検索中...")
         
         service = self.case_manager.get_google_drive_service()
         if not service:
-            logger.error("❌ Google Drive認証に失敗しました")
+            logger.error(" Google Drive認証に失敗しました")
             return []
         
         try:
@@ -619,12 +637,12 @@ class Phase1MultiRunner:
             ).execute()
             
             files = results.get('files', [])
-            print(f"✅ {len(files)}件の証拠ファイルを検出しました")
+            print(f"完了: {len(files)}件の証拠ファイルを検出しました")
             
             return files
             
         except Exception as e:
-            logger.error(f"❌ Google Drive検索エラー: {e}")
+            logger.error(f" Google Drive検索エラー: {e}")
             return []
     
     def _get_gdrive_info_from_database(self, evidence_number: str) -> Optional[Dict]:
@@ -654,13 +672,13 @@ class Phase1MultiRunner:
                 if evidence.get('evidence_id') == normalized_number:
                     gdrive_file_id = evidence.get('gdrive_file_id')
                     if not gdrive_file_id:
-                        logger.warning(f"⚠️ 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
+                        logger.warning(f" 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
                         return None
                     
                     # Google Drive APIでファイル情報を取得
                     service = self.case_manager.get_google_drive_service()
                     if not service:
-                        logger.error("❌ Google Drive認証に失敗しました")
+                        logger.error(" Google Drive認証に失敗しました")
                         return None
                     
                     file_info = service.files().get(
@@ -675,13 +693,13 @@ class Phase1MultiRunner:
                 if evidence.get('temp_id') == evidence_number:
                     gdrive_file_id = evidence.get('gdrive_file_id')
                     if not gdrive_file_id:
-                        logger.warning(f"⚠️ 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
+                        logger.warning(f" 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
                         return None
                     
                     # Google Drive APIでファイル情報を取得
                     service = self.case_manager.get_google_drive_service()
                     if not service:
-                        logger.error("❌ Google Drive認証に失敗しました")
+                        logger.error(" Google Drive認証に失敗しました")
                         return None
                     
                     file_info = service.files().get(
@@ -692,11 +710,11 @@ class Phase1MultiRunner:
                     
                     return file_info
             
-            logger.warning(f"⚠️ 証拠 {evidence_number} がdatabase.jsonに見つかりません")
+            logger.warning(f" 証拠 {evidence_number} がdatabase.jsonに見つかりません")
             return None
             
         except Exception as e:
-            logger.error(f"❌ database.json読み込みエラー: {e}")
+            logger.error(f" database.json読み込みエラー: {e}")
             return None
     
     def process_evidence(self, evidence_number: str, gdrive_file_info: Dict = None) -> bool:
@@ -716,24 +734,24 @@ class Phase1MultiRunner:
         try:
             # 1. ファイルパスの取得（Google Driveから）
             if gdrive_file_info:
-                logger.info(f"📁 ファイル: {gdrive_file_info['name']}")
+                logger.info(f"ファイル: {gdrive_file_info['name']}")
                 logger.info(f"🔗 URL: {gdrive_file_info.get('webViewLink', 'N/A')}")
                 
                 # Google Driveからダウンロード
                 file_path = self._download_file_from_gdrive(gdrive_file_info)
                 if not file_path:
-                    logger.error("❌ ファイルのダウンロードに失敗しました")
+                    logger.error(" ファイルのダウンロードに失敗しました")
                     return False
             else:
                 # ローカルファイルパスを使用
-                logger.warning("⚠️ Google Drive情報がありません。ローカルファイルを探します。")
+                logger.warning(" Google Drive情報がありません。ローカルファイルを探します。")
                 file_path = f"/tmp/{evidence_number}_sample.pdf"
                 if not os.path.exists(file_path):
-                    logger.error(f"❌ ファイルが見つかりません: {file_path}")
+                    logger.error(f" ファイルが見つかりません: {file_path}")
                     return False
             
             # 2. メタデータ抽出
-            logger.info(f"📊 メタデータを抽出中...")
+            logger.info(f"メタデータを抽出中...")
             metadata = self.metadata_extractor.extract_complete_metadata(
                 file_path,
                 gdrive_file_info=gdrive_file_info
@@ -742,13 +760,13 @@ class Phase1MultiRunner:
             logger.info(f"  - ファイルサイズ: {metadata['basic']['file_size_human']}")
             
             # 3. ファイル処理
-            logger.info(f"🔧 ファイルを処理中...")
+            logger.info(f"ファイルを処理中...")
             file_type = self._detect_file_type(file_path)
             processed_data = self.file_processor.process_file(file_path, file_type)
             logger.info(f"  - ファイル形式: {processed_data['file_type']}")
             
             # 4. AI分析（GPT-4o Vision）
-            logger.info(f"🤖 AI分析を実行中（GPT-4o Vision）...")
+            logger.info(f"AI分析を実行中（GPT-4o Vision）...")
             analysis_result = self.ai_analyzer.analyze_evidence_complete(
                 evidence_id=evidence_number,
                 file_path=file_path,
@@ -759,13 +777,13 @@ class Phase1MultiRunner:
             
             # 5. 品質評価
             quality = analysis_result.get('quality_assessment', {})
-            logger.info(f"📈 品質評価:")
+            logger.info(f"品質評価:")
             logger.info(f"  - 完全性スコア: {quality.get('completeness_score', 0):.1%}")
             logger.info(f"  - 信頼度スコア: {quality.get('confidence_score', 0):.1%}")
             logger.info(f"  - 言語化レベル: {quality.get('verbalization_level', 0)}")
             
             # 6. database.jsonに追加
-            logger.info(f"💾 database.jsonに保存中...")
+            logger.info(f"database.jsonに保存中...")
             database = self.load_database()
             
             evidence_entry = {
@@ -798,7 +816,7 @@ class Phase1MultiRunner:
             return True
             
         except Exception as e:
-            logger.error(f"❌ エラーが発生しました: {e}", exc_info=True)
+            logger.error(f" エラーが発生しました: {e}", exc_info=True)
             return False
     
     def _download_file_from_gdrive(self, file_info: Dict) -> Optional[str]:
@@ -832,7 +850,7 @@ class Phase1MultiRunner:
             return output_path
             
         except Exception as e:
-            logger.error(f"❌ ダウンロードエラー: {e}")
+            logger.error(f" ダウンロードエラー: {e}")
             return None
     
     def _detect_file_type(self, file_path: str) -> str:
@@ -856,36 +874,40 @@ class Phase1MultiRunner:
         pending_evidence = [e for e in database.get('evidence', []) if e.get('status') == 'pending']
         
         if not pending_evidence:
-            print("\n📋 未確定の証拠はありません")
+            print("\n未確定の証拠はありません")
             return
         
-        print(f"\n📋 未確定証拠: {len(pending_evidence)}件")
+        print(f"\n未確定証拠: {len(pending_evidence)}件")
         print("\n現在の順序:")
         for idx, evidence in enumerate(pending_evidence, 1):
             print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
             print(f"      種別: {evidence['evidence_type']}, 説明: {evidence['description']}")
         
-        print("\n【操作】")
-        print("  1. この順序で確定（甲001, 甲002...）")
-        print("  2. 順序を変更")
-        print("  0. キャンセル")
+        print("\n操作を選択してください:")
+        print("  1: この順序で確定 (甲001, 甲002...)")
+        print("  2: 順序を変更")
+        print("  0: キャンセル")
         
-        choice = input("\n選択してください (1-2, 0): ").strip()
+        while True:
+            choice = input("\n> ").strip()
+            if choice in ['0', '1', '2']:
+                break
+            print("エラー: 0, 1, 2 のいずれかを入力してください")
         
         if choice == '0':
-            print("❌ キャンセルしました")
+            print("エラー: キャンセルしました")
             return
         
         elif choice == '2':
             # 順序変更
-            print("\n📝 順序を変更します")
+            print("\n順序を変更します")
             print("   例: 1,3,2,4 → 1番目,3番目,2番目,4番目の順")
             new_order_input = input(f"新しい順序を入力 (1-{len(pending_evidence)}をカンマ区切り): ").strip()
             
             try:
                 new_order = [int(x.strip()) for x in new_order_input.split(',')]
                 if len(new_order) != len(pending_evidence) or set(new_order) != set(range(1, len(pending_evidence) + 1)):
-                    print("❌ 無効な順序です")
+                    print("エラー: 無効な順序です")
                     return
                 
                 # 並び替え
@@ -896,20 +918,20 @@ class Phase1MultiRunner:
                     print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
                 
             except ValueError:
-                print("❌ 入力エラー")
+                print("エラー: 入力エラー")
                 return
         
         # 確定確認
         confirm = input(f"\nこの順序で確定しますか？ (y/n): ").strip().lower()
         if confirm != 'y':
-            print("❌ キャンセルしました")
+            print("エラー: キャンセルしました")
             return
         
         # 確定処理
         print("\n📥 証拠を確定中...")
         service = self.case_manager.get_google_drive_service()
         if not service:
-            print("❌ Google Drive認証に失敗しました")
+            print("エラー: Google Drive認証に失敗しました")
             return
         
         success_count = 0
@@ -964,7 +986,7 @@ class Phase1MultiRunner:
         self.save_database(database)
         
         print("\n" + "="*70)
-        print(f"✅ 確定完了: {success_count}/{len(pending_evidence)}件")
+        print(f"完了: 確定完了: {success_count}/{len(pending_evidence)}件")
         print("="*70)
     
     def analyze_and_sort_pending_evidence(self):
@@ -978,10 +1000,10 @@ class Phase1MultiRunner:
         pending_evidence = [e for e in database.get('evidence', []) if e.get('status') == 'pending']
         
         if not pending_evidence:
-            print("\n📋 未確定の証拠はありません")
+            print("\n未確定の証拠はありません")
             return
         
-        print(f"\n📋 未確定証拠: {len(pending_evidence)}件")
+        print(f"\n未確定証拠: {len(pending_evidence)}件")
         print("\n現在の順序:")
         for idx, evidence in enumerate(pending_evidence, 1):
             print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
@@ -994,7 +1016,7 @@ class Phase1MultiRunner:
         
         confirm = input("\n処理を開始しますか？ (y/n): ").strip().lower()
         if confirm != 'y':
-            print("❌ キャンセルしました")
+            print("エラー: キャンセルしました")
             return
         
         # ステップ1: 日付抽出
@@ -1004,7 +1026,7 @@ class Phase1MultiRunner:
         
         service = self.case_manager.get_google_drive_service()
         if not service:
-            print("❌ Google Drive認証に失敗しました")
+            print("エラー: Google Drive認証に失敗しました")
             return
         
         for idx, evidence in enumerate(pending_evidence, 1):
@@ -1048,7 +1070,7 @@ class Phase1MultiRunner:
                 evidence['extracted_date'] = date_result.get('primary_date')
                 
                 if evidence['extracted_date']:
-                    print(f"  📅 抽出日付: {evidence['extracted_date']}")
+                    print(f"  抽出日付: {evidence['extracted_date']}")
                 else:
                     print(f"  ⚠️ 日付が抽出できませんでした")
                 
@@ -1075,7 +1097,7 @@ class Phase1MultiRunner:
         print(f"  - 日付抽出成功: {len(with_date)}件")
         print(f"  - 日付抽出失敗: {len(without_date)}件")
         
-        print("\n📅 ソート後の順序:")
+        print("\nソート後の順序:")
         for idx, evidence in enumerate(sorted_evidence, 1):
             date_str = evidence.get('extracted_date', '日付なし')
             print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']} ({date_str})")
@@ -1087,7 +1109,7 @@ class Phase1MultiRunner:
         
         confirm_finalize = input("\nこの順序で確定しますか？ (y/n): ").strip().lower()
         if confirm_finalize != 'y':
-            print("❌ キャンセルしました（日付抽出結果はdatabase.jsonに保存されました）")
+            print("エラー: キャンセルしました（日付抽出結果はdatabase.jsonに保存されました）")
             self.save_database(database)
             return
         
@@ -1106,7 +1128,7 @@ class Phase1MultiRunner:
             
             print(f"\n[{idx}/{len(sorted_evidence)}] {evidence['temp_id']} → {ko_id}")
             date_str = evidence.get('extracted_date', '日付なし')
-            print(f"  📅 日付: {date_str}")
+            print(f"  日付: {date_str}")
             
             try:
                 # ファイルを取得
@@ -1146,8 +1168,8 @@ class Phase1MultiRunner:
         self.save_database(database)
         
         print("\n" + "="*70)
-        print(f"✅ 確定完了: {success_count}/{len(sorted_evidence)}件")
-        print(f"📅 日付順ソート: {len(with_date)}件")
+        print(f"完了: 確定完了: {success_count}/{len(sorted_evidence)}件")
+        print(f"日付順ソート: {len(with_date)}件")
         print("="*70)
     
     def show_database_status(self):
@@ -1158,40 +1180,40 @@ class Phase1MultiRunner:
         print("  database.json 状態確認")
         print("="*70)
         
-        print(f"\n📁 事件情報:")
+        print(f"\n事件情報:")
         metadata = database.get('metadata', {})
-        print(f"  - 事件ID: {metadata.get('case_id', 'N/A')}")
-        print(f"  - 事件名: {metadata.get('case_name', 'N/A')}")
-        print(f"  - データベースバージョン: {metadata.get('database_version', database.get('version', 'N/A'))}")
-        print(f"  - 最終更新: {metadata.get('last_updated', 'N/A')}")
+        print(f"  事件ID: {metadata.get('case_id', 'N/A')}")
+        print(f"  事件名: {metadata.get('case_name', 'N/A')}")
+        print(f"  データベースバージョン: {metadata.get('database_version', database.get('version', 'N/A'))}")
+        print(f"  最終更新: {metadata.get('last_updated', 'N/A')}")
         
-        print(f"\n📊 証拠統計:")
-        print(f"  - 総証拠数: {len(database['evidence'])}")
+        print(f"\n証拠統計:")
+        print(f"  総証拠数: {len(database['evidence'])}件")
         
         completed = [e for e in database['evidence'] if e.get('status') == 'completed']
-        print(f"  - 完了: {len(completed)}")
+        print(f"  完了: {len(completed)}件")
         
         pending = [e for e in database['evidence'] if e.get('status') == 'pending']
-        print(f"  - 未確定: {len(pending)}")
+        print(f"  未確定: {len(pending)}件")
         
         in_progress = [e for e in database['evidence'] if e.get('status') == 'in_progress']
-        print(f"  - 処理中: {len(in_progress)}")
+        print(f"  処理中: {len(in_progress)}件")
         
         if database['evidence']:
-            print(f"\n📝 証拠一覧:")
-            for evidence in database['evidence'][:20]:  # 最大20件表示
+            print(f"\n証拠一覧 (最大20件):")
+            for evidence in database['evidence'][:20]:
                 status = evidence.get('status', 'unknown')
                 if status == 'completed':
-                    status_icon = "✅"
+                    status_text = "[完了]"
                     evidence_id = evidence.get('evidence_number', evidence.get('evidence_id', 'N/A'))
                 elif status == 'pending':
-                    status_icon = "⏳"
+                    status_text = "[未確定]"
                     evidence_id = evidence.get('temp_id', 'N/A')
                 else:
-                    status_icon = "❓"
+                    status_text = "[不明]"
                     evidence_id = 'N/A'
                 
-                print(f"  {status_icon} {evidence_id} - {evidence.get('original_filename', 'N/A')}")
+                print(f"  {status_text} {evidence_id} - {evidence.get('original_filename', 'N/A')}")
             
             if len(database['evidence']) > 20:
                 print(f"  ... 他 {len(database['evidence']) - 20}件")
@@ -1211,7 +1233,7 @@ class Phase1MultiRunner:
             choice = input("\n選択してください (1-9): ").strip()
             
             if choice == '1':
-                # 🆕 証拠整理（未分類フォルダから自動整理）
+                # 証拠整理（未分類フォルダから自動整理）
                 try:
                     organizer = EvidenceOrganizer(self.case_manager, self.current_case)
                     organizer.interactive_organize()
@@ -1232,7 +1254,7 @@ class Phase1MultiRunner:
                 # 範囲指定して分析
                 evidence_numbers = self.get_evidence_number_input()
                 if evidence_numbers:
-                    print(f"\n📋 処理対象: {', '.join(evidence_numbers)}")
+                    print(f"\n処理対象: {', '.join(evidence_numbers)}")
                     confirm = input("処理を開始しますか？ (y/n): ").strip().lower()
                     if confirm == 'y':
                         for evidence_number in evidence_numbers:
@@ -1243,7 +1265,7 @@ class Phase1MultiRunner:
                 # Google Driveから自動検出して分析
                 files = self.search_evidence_files_from_gdrive()
                 if files:
-                    print(f"\n📋 検出されたファイル: {len(files)}件")
+                    print(f"\n検出されたファイル: {len(files)}件")
                     for idx, file_info in enumerate(files[:10], 1):
                         print(f"  {idx}. {file_info['name']}")
                     
@@ -1266,7 +1288,7 @@ class Phase1MultiRunner:
                 self.finalize_pending_evidence()
                     
             elif choice == '8':
-                # 📅 未確定証拠をAI分析（日付抽出→自動ソート→確定）
+                # 未確定証拠をAI分析（日付抽出→自動ソート→確定）
                 try:
                     self.analyze_and_sort_pending_evidence()
                 except Exception as e:
@@ -1276,7 +1298,7 @@ class Phase1MultiRunner:
                     
             elif choice == '9':
                 # 終了
-                print("\n👋 Phase 1完全版システムを終了します")
+                print("\nPhase 1完全版システムを終了します")
                 break
                 
             else:
