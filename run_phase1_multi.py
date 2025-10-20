@@ -414,6 +414,54 @@ class Phase1MultiRunner:
             logger.error(f"❌ Google Drive検索エラー: {e}")
             return []
     
+    def _get_gdrive_info_from_database(self, evidence_number: str) -> Optional[Dict]:
+        """database.jsonから証拠のGoogle Drive情報を取得
+        
+        Args:
+            evidence_number: 証拠番号（例: ko001, 甲001）
+        
+        Returns:
+            Google Driveファイル情報（見つからない場合はNone）
+        """
+        try:
+            database = self.load_database()
+            
+            # 証拠番号を正規化（ko001, 甲001 → ko001で統一）
+            if evidence_number.startswith('甲'):
+                evidence_number = f"ko{evidence_number[1:]}"
+            elif evidence_number.startswith('乙'):
+                evidence_number = f"otsu{evidence_number[1:]}"
+            
+            # データベースから証拠を検索
+            for evidence in database.get('evidence', []):
+                if evidence.get('evidence_id') == evidence_number:
+                    # Google DriveファイルIDを取得
+                    gdrive_file_id = evidence.get('gdrive_file_id')
+                    if not gdrive_file_id:
+                        logger.warning(f"⚠️ 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
+                        return None
+                    
+                    # Google Drive APIでファイル情報を取得
+                    service = self.case_manager.get_google_drive_service()
+                    if not service:
+                        logger.error("❌ Google Drive認証に失敗しました")
+                        return None
+                    
+                    file_info = service.files().get(
+                        fileId=gdrive_file_id,
+                        supportsAllDrives=True,
+                        fields='id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink'
+                    ).execute()
+                    
+                    return file_info
+            
+            logger.warning(f"⚠️ 証拠 {evidence_number} がdatabase.jsonに見つかりません")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ database.json読み込みエラー: {e}")
+            return None
+    
     def process_evidence(self, evidence_number: str, gdrive_file_info: Dict = None) -> bool:
         """証拠の処理（完全版）
         
@@ -621,7 +669,8 @@ class Phase1MultiRunner:
                 evidence_numbers = self.get_evidence_number_input()
                 if evidence_numbers:
                     for evidence_number in evidence_numbers:
-                        self.process_evidence(evidence_number)
+                        gdrive_file_info = self._get_gdrive_info_from_database(evidence_number)
+                        self.process_evidence(evidence_number, gdrive_file_info)
                         
             elif choice == '3':
                 # 範囲指定して分析
@@ -631,7 +680,8 @@ class Phase1MultiRunner:
                     confirm = input("処理を開始しますか？ (y/n): ").strip().lower()
                     if confirm == 'y':
                         for evidence_number in evidence_numbers:
-                            self.process_evidence(evidence_number)
+                            gdrive_file_info = self._get_gdrive_info_from_database(evidence_number)
+                            self.process_evidence(evidence_number, gdrive_file_info)
                             
             elif choice == '4':
                 # Google Driveから自動検出して分析
