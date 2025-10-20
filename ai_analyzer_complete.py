@@ -477,34 +477,21 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             if result:
                 logger.debug(f"API応答プレビュー: {result[:200]}...")
             
-            # OpenAIのコンテンツポリシー拒否チェック（より厳密な判定）
-            # global_config.pyの DISABLE_CONTENT_POLICY_CHECK または環境変数で無効化可能
-            disable_check = DISABLE_CONTENT_POLICY_CHECK
-            
-            if not disable_check:
-                # 真の拒否メッセージの特徴:
-                # 1. 非常に短い（通常100文字未満）
-                # 2. JSON形式ではない
-                # 3. "I'm sorry, I can't assist with that"という完全一致
-                if result and len(result) < 200 and "```" not in result and "{" not in result:
-                    # JSON形式ではない短い応答の場合のみチェック
-                    if "I'm sorry, I can't assist with that" in result or \
-                       "I cannot assist with that request" in result or \
-                       (result.startswith("I'm sorry") and "assist" in result):
-                        
-                        # 最大2回までリトライ（コンテキスト追加で再試行）
-                        if retry_count < 2:
-                            logger.warning(f"⚠️ Vision API: コンテンツポリシーで拒否されました（試行{retry_count + 1}回目）")
-                            logger.warning(f"   拒否メッセージ: {result}")
-                            logger.info(f"🔄 コンテキスト情報を追加して再試行します...")
-                            time.sleep(1)  # レート制限回避
-                            return self._analyze_with_vision(file_path, prompt, file_type, retry_count + 1, track_retry)
-                        else:
-                            logger.warning("⚠️ Vision API: 最大リトライ回数に達しました")
-                            logger.warning(f"   最終拒否メッセージ: {result}")
-                            logger.info("📝 OCRテキストを使用したテキストベース分析にフォールバック")
-                            logger.info("   ヒント: 誤検出の場合は DISABLE_CONTENT_POLICY_CHECK=true で無効化できます")
-                            return None  # Noneを返してフォールバック処理を促す
+            # OpenAIのコンテンツポリシー拒否チェック
+            # Vision APIが拒否した場合は、常にOCRフォールバックに切り替える
+            # 拒否メッセージの特徴:
+            # 1. 非常に短い（通常100文字未満）
+            # 2. JSON形式ではない
+            # 3. "I'm sorry, I can't assist with that"という完全一致
+            if result and len(result) < 200 and "```" not in result and "{" not in result:
+                if "I'm sorry, I can't assist with that" in result or \
+                   "I cannot assist with that request" in result or \
+                   (result.startswith("I'm sorry") and "assist" in result):
+                    
+                    logger.warning(f"⚠️ Vision API: コンテンツポリシーで拒否されました")
+                    logger.warning(f"   拒否メッセージ: {result}")
+                    logger.info("📝 即座にOCRテキストベース分析にフォールバックします")
+                    return None  # Noneを返してフォールバック処理を促す
             
             parsed_result = self._parse_ai_response(result)
             
