@@ -14,7 +14,7 @@ import base64
 from typing import Dict, List, Optional, Any
 import openai
 
-from config import *
+from global_config import *
 from file_processor import FileProcessor
 from metadata_extractor import MetadataExtractor
 

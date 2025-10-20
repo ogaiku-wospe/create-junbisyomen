@@ -23,7 +23,7 @@ from typing import List, Optional
 
 # 自作モジュールのインポート
 try:
-    from config import *
+    from global_config import *
     from metadata_extractor import MetadataExtractor
     from file_processor import FileProcessor
     from ai_analyzer_complete import AIAnalyzerComplete

@@ -33,7 +33,7 @@ try:
 except ImportError:
     DOCX_AVAILABLE = False
 
-from config import *
+from global_config import *
 import logging
 
 logger = logging.getLogger(__name__)

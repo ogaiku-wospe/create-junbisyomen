@@ -57,7 +57,7 @@ try:
 except ImportError:
     TESSERACT_AVAILABLE = False
 
-from config import *
+from global_config import *
 
 logger = logging.getLogger(__name__)
 
