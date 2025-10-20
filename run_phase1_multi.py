@@ -223,6 +223,21 @@ class Phase1MultiRunner:
             
             print(f"  ✅ 乙号証フォルダ作成")
             
+            # 未分類フォルダを作成
+            unclassified_folder_metadata = {
+                'name': '未分類',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [case_folder_id]
+            }
+            
+            unclassified_folder = service.files().create(
+                body=unclassified_folder_metadata,
+                supportsAllDrives=True,
+                fields='id, name'
+            ).execute()
+            
+            print(f"  ✅ 未分類フォルダ作成")
+            
             # database.jsonを作成
             database = {
                 "metadata": {
