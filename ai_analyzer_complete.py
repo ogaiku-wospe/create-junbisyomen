@@ -139,7 +139,9 @@ class AIAnalyzerComplete:
         # ファイルタイプに応じた分析
         if file_type in ['image', 'pdf', 'document']:
             # Vision API使用
-            return self._analyze_with_vision(file_path, analysis_prompt, file_type)
+            # HEIC等の変換済みファイルパスを使用
+            actual_file_path = file_content.get('processed_file_path', file_path)
+            return self._analyze_with_vision(actual_file_path, analysis_prompt, file_type)
         else:
             # テキストベース分析
             return self._analyze_with_text(analysis_prompt, file_content)
