@@ -24,6 +24,7 @@ import pickle
 from typing import List, Dict, Optional
 from datetime import datetime
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -59,10 +60,28 @@ class CaseManager:
         self.cache_expiry_hours = 24
     
     def get_google_drive_service(self):
-        """Google Drive APIサービスを取得"""
+        """Google Drive APIサービスを取得（サービスアカウントとOAuth両対応）"""
         if self.service:
             return self.service
         
+        if not os.path.exists('credentials.json'):
+            print("\n❌ エラー: credentials.jsonが見つかりません")
+            print("Google Cloud Consoleからcredentials.jsonをダウンロードしてください")
+            return None
+        
+        # credentials.jsonの形式を確認
+        with open('credentials.json', 'r') as f:
+            creds_data = json.load(f)
+        
+        # サービスアカウント形式の場合
+        if 'type' in creds_data and creds_data['type'] == 'service_account':
+            print("🔐 サービスアカウント認証を使用")
+            creds = service_account.Credentials.from_service_account_file(
+                'credentials.json', scopes=SCOPES)
+            self.service = build('drive', 'v3', credentials=creds)
+            return self.service
+        
+        # OAuth 2.0（デスクトップアプリ）形式の場合
         creds = None
         
         # token.pickleがあれば読み込み
@@ -75,11 +94,6 @@ class CaseManager:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                if not os.path.exists('credentials.json'):
-                    print("\n❌ エラー: credentials.jsonが見つかりません")
-                    print("Google Cloud Consoleからcredentials.jsonをダウンロードしてください")
-                    return None
-                
                 flow = InstalledAppFlow.from_client_secrets_file(
                     'credentials.json', SCOPES)
                 creds = flow.run_local_server(port=0)
