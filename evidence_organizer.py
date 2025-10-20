@@ -691,10 +691,89 @@ class EvidenceOrganizer:
             ).execute()
             
             print(f"✅ ファイルを移動・リネーム: {proposal['suggested_filename']}")
+            
+            # database.jsonに証拠を登録
+            if not self._save_evidence_to_database(file_info, proposal):
+                print(f"⚠️ database.json保存に失敗しましたが、ファイル移動は成功しました")
+            
             return True
             
         except Exception as e:
             print(f"❌ ファイル移動エラー: {e}")
+            return False
+    
+    def _save_evidence_to_database(self, file_info: Dict, proposal: Dict) -> bool:
+        """証拠情報をdatabase.jsonに保存
+        
+        Args:
+            file_info: Google Driveファイル情報
+            proposal: 証拠割り当て提案
+        
+        Returns:
+            成功: True, 失敗: False
+        """
+        try:
+            # database.jsonを読み込み
+            if not os.path.exists("database.json"):
+                print(f"❌ database.jsonが見つかりません")
+                return False
+            
+            with open("database.json", 'r', encoding='utf-8') as f:
+                database = json.load(f)
+            
+            # 証拠情報を作成
+            evidence_entry = {
+                "evidence_id": proposal['evidence_id'],
+                "evidence_number": proposal['evidence_number'],
+                "original_filename": file_info['name'],
+                "renamed_filename": proposal['suggested_filename'],
+                "evidence_type": proposal['evidence_type'],
+                "description": proposal['description'],
+                "status": "completed",
+                "created_at": datetime.now().isoformat(),
+                "file_size": int(file_info.get('size', 0)),
+                "gdrive_file_id": file_info['id'],
+                "complete_metadata": {
+                    "basic": {
+                        "file_name": proposal['suggested_filename'],
+                        "file_size": int(file_info.get('size', 0)),
+                        "file_type": file_info.get('mimeType', ''),
+                        "created_date": file_info.get('createdTime', ''),
+                        "modified_date": file_info.get('modifiedTime', '')
+                    },
+                    "gdrive": {
+                        "file_id": file_info['id'],
+                        "web_view_link": file_info.get('webViewLink', ''),
+                        "web_content_link": file_info.get('webContentLink', '')
+                    }
+                }
+            }
+            
+            # evidenceリストに追加（番号順にソート）
+            database['evidence'].append(evidence_entry)
+            
+            # 証拠番号でソート
+            def sort_key(e):
+                eid = e['evidence_id']
+                side = 'ko' if eid.startswith('ko') else 'otsu'
+                number = int(re.search(r'\d+', eid).group()) if re.search(r'\d+', eid) else 999
+                return (0 if side == 'ko' else 1, number)
+            
+            database['evidence'].sort(key=sort_key)
+            
+            # メタデータを更新
+            database['metadata']['last_updated'] = datetime.now().isoformat()
+            
+            # 保存
+            with open("database.json", 'w', encoding='utf-8') as f:
+                json.dump(database, f, ensure_ascii=False, indent=2)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ database.json保存エラー: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def interactive_organize(self):

@@ -569,9 +569,10 @@ class Phase1MultiRunner:
         print("="*70)
         
         print(f"\n📁 事件情報:")
-        print(f"  - 事件ID: {database['case_info']['case_id']}")
-        print(f"  - 事件名: {database['case_info']['case_name']}")
-        print(f"  - フォルダURL: {gconfig.GDRIVE_FOLDER_URL_FORMAT.format(folder_id=database['case_info']['case_folder_id'])}")
+        print(f"  - 事件ID: {database['metadata']['case_id']}")
+        print(f"  - 事件名: {database['metadata']['case_name']}")
+        print(f"  - データベースバージョン: {database['metadata']['database_version']}")
+        print(f"  - 最終更新: {database['metadata']['last_updated']}")
         
         print(f"\n📊 証拠統計:")
         print(f"  - 総証拠数: {len(database['evidence'])}")
