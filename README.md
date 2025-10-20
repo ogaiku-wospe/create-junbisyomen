@@ -387,11 +387,47 @@ pip install pillow-heif
 
 ---
 
+## 🆕 v3.7.1 更新履歴（2025年10月20日）
+
+### 🔧 フィールド名を document_date に統一（より明確な命名）
+
+**v3.7.0で導入した`creation_date`を`document_date`に改名し、証拠説明書との対応を明確化しました。**
+
+#### 変更理由
+- `creation_date`は「いつ作成されたか」が不明瞭（ファイル作成日？文書作成日？）
+- `document_date`は「証拠説明書に記載する日付」と明確に対応
+- 証拠実務における用語との整合性向上
+
+#### 変更内容
+```json
+// v3.7.0（旧）
+"temporal_information": {
+  "creation_date": "2021-08-15",
+  "creation_date_source": "契約書末尾の契約締結日"
+}
+
+// v3.7.1（新）
+"temporal_information": {
+  "document_date": "2021-08-15",              // 証拠説明書記載用の日付
+  "document_date_source": "契約書末尾の契約締結日",
+  "date_confidence": "high - 契約書に明記"    // 信頼度も記録
+}
+```
+
+#### 後方互換性
+- システムは`document_date`と`creation_date`の両方をチェック
+- 既存データ（v3.7.0形式）も引き続き動作
+- 新規分析からは`document_date`を使用
+
+---
+
 ## 🆕 v3.7.0 更新履歴（2025年10月20日）
 
 ### 🎯 証拠の作成年月日に特化 + メニュー構造の大幅簡素化
 
 **証拠説明書作成に必要な「作成年月日」に特化し、メニューを10項目→7項目に整理しました。**
+
+**注**: v3.7.1で`creation_date`→`document_date`に改名されました。以下の説明では`document_date`と読み替えてください。
 
 #### 1️⃣ 日付抽出の焦点を「作成年月日」に変更
 
@@ -406,14 +442,15 @@ pip install pillow-heif
   "primary_date": "最も重要な日付"
 }
 
-// 新形式（v3.7.0以降）
+// 新形式（v3.7.1以降）※v3.7.0はcreation_date
 "temporal_information": {
-  "creation_date": "2021-08-15",              // 証拠の作成年月日（必須）
-  "creation_date_source": "契約書末尾の契約締結日", // 根拠を明記
+  "document_date": "2021-08-15",              // 証拠の作成年月日（必須）
+  "document_date_source": "契約書末尾の契約締結日", // 根拠を明記
   "other_dates": [                             // その他の日付
     {"date": "2021-10-20", "context": "支払期限"}
   ],
-  "timeline": "時系列の客観的整理"
+  "timeline": "時系列の客観的整理",
+  "date_confidence": "high - 契約書に明記"    // 信頼度
 }
 ```
 
@@ -426,8 +463,9 @@ pip install pillow-heif
 
 **メリット:**
 - ✅ 証拠説明書に直接使える情報を確実に抽出
-- ✅ 作成年月日の根拠（`creation_date_source`）も記録
+- ✅ 作成年月日の根拠（`document_date_source`）も記録
 - ✅ 日付の意味が明確（作成日 vs その他の日付）
+- ✅ 日付の信頼度（`date_confidence`）も記録
 
 #### 2️⃣ メニュー構造の大幅簡素化（10項目 → 7項目）
 
@@ -468,10 +506,10 @@ pip install pillow-heif
 メニュー8: AI日付抽出 → 自動ソート → 確定
 ```
 
-**新方式（v3.7.0以降）:**
+**新方式（v3.7.1以降）:**
 ```
 メニュー4: 
-  1. 既存分析からcreation_dateを取得（分析済み証拠）
+  1. 既存分析からdocument_dateを取得（分析済み証拠）
   2. 未分析証拠のみ軽量日付抽出
   3. 作成年月日順にソート（古い順）
   4. 確定番号割り当て → 甲号証へ移動
@@ -479,8 +517,9 @@ pip install pillow-heif
 
 **メリット:**
 - ✅ 既に分析済みの証拠は再処理不要（高速化）
-- ✅ 通常分析で取得したcreation_dateを活用
+- ✅ 通常分析で取得したdocument_dateを活用
 - ✅ 1つのメニューで完結（シンプル）
+- ✅ 後方互換性あり（v3.7.0のcreation_dateも読み取り可能）
 
 ---
 
