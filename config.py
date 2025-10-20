@@ -5,6 +5,16 @@ Phase 1 完全自動化システム - 設定ファイル（完全版）
 import os
 from datetime import datetime
 
+# .envファイルを読み込む
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ .envファイルを読み込みました")
+except ImportError:
+    print("⚠️ python-dotenvが未インストール - .envファイルは読み込まれません")
+except Exception as e:
+    print(f"⚠️ .envファイルの読み込みに失敗: {e}")
+
 # ================================
 # バージョン情報
 # ================================
@@ -143,7 +153,7 @@ URL_EXPIRY_HOURS = 24  # ダウンロードURL有効期限
 # ローカルパス設定
 # ================================
 
-LOCAL_WORK_DIR = "/home/user/phase1_complete"
+LOCAL_WORK_DIR = "/Users/ogaiku/create-junbisyomen"
 LOCAL_TEMP_DIR = "/tmp/phase1_complete_temp"
 LOCAL_CACHE_DIR = "/tmp/phase1_cache"
 LOCAL_PROMPT_PATH = f"{LOCAL_WORK_DIR}/prompts/Phase1_EvidenceAnalysis.txt"
@@ -253,5 +263,22 @@ MAX_FILE_SIZE = {
 # 分析品質チェック
 ENABLE_QUALITY_CHECK = True
 QUALITY_CHECK_THRESHOLDS = {
-    'completeness': 0.9,      # 完全性: 90%以上
-    'verbalization': 0.85,    # 言語化: 85%以上
+    'completeness': 0.9,        # 完全性: 90%以上
+    'verbalization': 0.85,      # 言語化: 85%以上
+    'metadata_coverage': 0.95,  # メタデータカバレッジ: 95%以上
+    'confidence': 0.8           # 信頼度: 80%以上
+}
+
+# ================================
+# 画像処理設定
+# ================================
+
+IMAGE_MAX_SIZE = (3840, 2160)  # 最大解像度（4K）
+IMAGE_COMPRESSION_QUALITY = 90  # JPEG圧縮品質（1-100）
+
+# ================================
+# PDF処理設定
+# ================================
+
+PDF_MAX_PAGES = 100  # 一度に処理する最大ページ数
+PDF_DPI = 300  # PDF→画像変換時のDPI

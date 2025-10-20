@@ -527,27 +527,3 @@ class AIAnalyzerComplete:
             "analysis_result": f"証拠 {evidence_number} の分析結果",
             "evidence_number": evidence_number
         }
-
-    def analyze_complete(self, processed_data: Dict, evidence_number: str) -> Dict:
-        """
-        analyze_evidence_complete の後方互換エイリアス
-        
-        Args:
-            processed_data: ファイル処理結果
-            evidence_number: 証拠番号
-        
-        Returns:
-            分析結果（簡易版）
-        """
-        logger.warning(f"analyze_complete は非推奨です。analyze_evidence_complete を使用してください。")
-        
-        # 簡易的な返り値（実際のプロジェクトでは適切な実装が必要）
-        return {
-            "quality_scores": {
-                "completeness_score": 90.0,
-                "confidence_score": 85.0,
-                "verbalization_level": 4
-            },
-            "analysis_result": f"証拠 {evidence_number} の分析結果",
-            "evidence_number": evidence_number
-        }
