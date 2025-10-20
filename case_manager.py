@@ -383,25 +383,31 @@ class CaseManager:
             print(f"    🔗 URL: {gconfig.GDRIVE_FOLDER_URL_FORMAT.format(folder_id=case['case_folder_id'])}")
             print()
     
-    def select_case_interactive(self, cases: List[Dict]) -> Optional[Dict]:
+    def select_case_interactive(self, cases: List[Dict], allow_new: bool = False) -> Optional[Dict]:
         """対話的に事件を選択
         
         Args:
             cases: 事件情報のリスト
+            allow_new: 新規作成オプションを表示するか
         
         Returns:
-            選択された事件情報（キャンセルの場合はNone）
+            選択された事件情報（キャンセルの場合はNone、新規作成の場合は"new"）
         """
         if not cases:
             return None
         
-        if len(cases) == 1:
+        if len(cases) == 1 and not allow_new:
             print(f"✅ 事件を自動選択: {cases[0]['case_name']}")
             return cases[0]
         
         while True:
             try:
-                choice = input(f"\n事件を選択 (1-{len(cases)}, 0=終了, r=再読み込み): ").strip().lower()
+                if allow_new:
+                    prompt = f"\n事件を選択 (1-{len(cases)}, {len(cases)+1}=新規作成, 0=終了, r=再読み込み): "
+                else:
+                    prompt = f"\n事件を選択 (1-{len(cases)}, 0=終了, r=再読み込み): "
+                
+                choice = input(prompt).strip().lower()
                 
                 if choice == '0':
                     return None
@@ -412,15 +418,21 @@ class CaseManager:
                         os.remove(self.cache_file)
                     new_cases = self.detect_cases(use_cache=False)
                     self.display_cases(new_cases)
-                    return self.select_case_interactive(new_cases)
+                    return self.select_case_interactive(new_cases, allow_new=allow_new)
                 
                 idx = int(choice) - 1
+                
+                # 新規作成オプション
+                if allow_new and idx == len(cases):
+                    return "new"
+                
                 if 0 <= idx < len(cases):
                     selected = cases[idx]
                     print(f"\n✅ 選択: {selected['case_name']}")
                     return selected
                 else:
-                    print(f"❌ 1-{len(cases)} の番号を入力してください。")
+                    max_num = len(cases) + 1 if allow_new else len(cases)
+                    print(f"❌ 1-{max_num} の番号を入力してください。")
             except ValueError:
                 print("❌ 数字を入力してください。")
             except KeyboardInterrupt:

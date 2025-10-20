@@ -67,7 +67,7 @@ class Phase1MultiRunner:
         self.ai_analyzer = AIAnalyzerComplete()
     
     def select_case(self) -> bool:
-        """事件を選択
+        """事件を選択または新規作成
         
         Returns:
             選択成功: True, キャンセル: False
@@ -80,20 +80,36 @@ class Phase1MultiRunner:
         cases = self.case_manager.detect_cases()
         
         if not cases:
-            print("\n❌ 事件が見つかりませんでした。")
-            print("\n💡 ヒント:")
-            print("  1. global_config.py で SHARED_DRIVE_ROOT_ID を確認")
-            print("  2. 共有ドライブに事件フォルダを作成")
-            print("  3. 事件フォルダ内に '甲号証' フォルダを作成")
-            return False
+            print("\n📋 事件が見つかりませんでした。")
+            print("\n【選択してください】")
+            print("  1. 新規事件を作成")
+            print("  2. 終了")
+            
+            choice = input("\n選択してください (1-2): ").strip()
+            
+            if choice == '1':
+                # 新規事件作成
+                return self._create_new_case()
+            else:
+                print("\n❌ 終了します")
+                return False
         
         # 事件一覧を表示
+        print("\n【検出された事件】")
         self.case_manager.display_cases(cases)
         
-        # 事件を選択
-        selected_case = self.case_manager.select_case_interactive(cases)
+        print("\n【選択してください】")
+        print(f"  1-{len(cases)}. 既存事件を選択")
+        print(f"  {len(cases)+1}. 新規事件を作成")
+        print(f"  0. 終了")
         
-        if not selected_case:
+        # 事件を選択
+        selected_case = self.case_manager.select_case_interactive(cases, allow_new=True)
+        
+        if selected_case == "new":
+            # 新規事件作成
+            return self._create_new_case()
+        elif not selected_case:
             print("\n❌ 事件が選択されませんでした")
             return False
         
@@ -103,6 +119,162 @@ class Phase1MultiRunner:
         self.case_manager.generate_case_config(selected_case, "current_case.json")
         
         return True
+    
+    def _create_new_case(self) -> bool:
+        """新規事件を作成
+        
+        Returns:
+            作成成功: True, キャンセル: False
+        """
+        print("\n" + "="*70)
+        print("  新規事件の作成")
+        print("="*70)
+        
+        try:
+            # 事件情報を入力
+            print("\n📝 事件情報を入力してください")
+            
+            case_id = input("\n事件ID（例: 2025_001）: ").strip()
+            if not case_id:
+                print("❌ 事件IDは必須です")
+                return False
+            
+            case_name = input("事件名（例: 損害賠償請求事件）: ").strip()
+            if not case_name:
+                print("❌ 事件名は必須です")
+                return False
+            
+            case_number = input("事件番号（例: 令和7年(ワ)第1号）[省略可]: ").strip()
+            court = input("裁判所（例: 東京地方裁判所）[省略可]: ").strip()
+            plaintiff = input("原告（例: 山田太郎）[省略可]: ").strip()
+            defendant = input("被告（例: 株式会社〇〇）[省略可]: ").strip()
+            
+            # 確認
+            print("\n📋 入力内容の確認:")
+            print(f"  事件ID: {case_id}")
+            print(f"  事件名: {case_name}")
+            if case_number:
+                print(f"  事件番号: {case_number}")
+            if court:
+                print(f"  裁判所: {court}")
+            if plaintiff:
+                print(f"  原告: {plaintiff}")
+            if defendant:
+                print(f"  被告: {defendant}")
+            
+            confirm = input("\nこの内容で作成しますか？ (y/n): ").strip().lower()
+            if confirm != 'y':
+                print("❌ キャンセルしました")
+                return False
+            
+            # フォルダ作成
+            print("\n📁 フォルダを作成中...")
+            
+            service = self.case_manager.get_google_drive_service()
+            if not service:
+                print("❌ Google Drive認証に失敗しました")
+                return False
+            
+            # 事件フォルダを作成
+            case_folder_name = f"{case_id}_{case_name}"
+            
+            folder_metadata = {
+                'name': case_folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [self.case_manager.shared_drive_root_id]
+            }
+            
+            case_folder = service.files().create(
+                body=folder_metadata,
+                supportsAllDrives=True,
+                fields='id, name, webViewLink'
+            ).execute()
+            
+            case_folder_id = case_folder['id']
+            print(f"  ✅ 事件フォルダ作成: {case_folder_name}")
+            
+            # 甲号証フォルダを作成
+            ko_folder_metadata = {
+                'name': '甲号証',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [case_folder_id]
+            }
+            
+            ko_folder = service.files().create(
+                body=ko_folder_metadata,
+                supportsAllDrives=True,
+                fields='id, name'
+            ).execute()
+            
+            print(f"  ✅ 甲号証フォルダ作成")
+            
+            # 乙号証フォルダを作成
+            otsu_folder_metadata = {
+                'name': '乙号証',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [case_folder_id]
+            }
+            
+            otsu_folder = service.files().create(
+                body=otsu_folder_metadata,
+                supportsAllDrives=True,
+                fields='id, name'
+            ).execute()
+            
+            print(f"  ✅ 乙号証フォルダ作成")
+            
+            # database.jsonを作成
+            database = {
+                "metadata": {
+                    "database_version": "3.0",
+                    "case_id": case_id,
+                    "case_name": case_name,
+                    "case_number": case_number or "",
+                    "created_at": datetime.now().isoformat(),
+                    "last_updated": datetime.now().isoformat(),
+                    "system_version": "1.0.0"
+                },
+                "case_info": {
+                    "case_name": case_name,
+                    "case_number": case_number or "",
+                    "court": court or "",
+                    "plaintiff": plaintiff or "",
+                    "defendant": defendant or "",
+                    "case_summary": ""
+                },
+                "evidence": [],
+                "phase1_progress": []
+            }
+            
+            # ローカルに保存
+            with open('database.json', 'w', encoding='utf-8') as f:
+                json.dump(database, f, ensure_ascii=False, indent=2)
+            
+            print(f"  ✅ database.json作成")
+            
+            # 事件情報を設定
+            self.current_case = {
+                'case_id': case_id,
+                'case_name': case_name,
+                'case_folder_id': case_folder_id,
+                'ko_evidence_folder_id': ko_folder['id'],
+                'otsu_evidence_folder_id': otsu_folder['id'],
+                'case_folder_url': case_folder.get('webViewLink', '')
+            }
+            
+            # 事件設定ファイルを生成
+            self.case_manager.generate_case_config(self.current_case, "current_case.json")
+            
+            print("\n✅ 新規事件を作成しました")
+            print(f"📁 フォルダURL: {case_folder.get('webViewLink', 'N/A')}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"\n❌ エラーが発生しました: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def load_database(self) -> dict:
         """database.jsonの読み込み（事件固有）"""
