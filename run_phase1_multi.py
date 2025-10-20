@@ -747,11 +747,32 @@ class Phase1MultiRunner:
                     return False
             else:
                 # ローカルファイルパスを使用
-                logger.warning(" Google Drive情報がありません。ローカルファイルを探します。")
-                file_path = f"/tmp/{evidence_number}_sample.pdf"
+                logger.warning(" Google Drive情報がありません。ローカルファイルを指定してください。")
+                print("\n" + "="*70)
+                print(f"  証拠 {evidence_number} のファイルパスを入力してください")
+                print("="*70)
+                print("\n例:")
+                print("  /home/user/webapp/evidence_files/tmp_020.pdf")
+                print("  /tmp/sample.pdf")
+                print("\nキャンセル: 空Enter")
+                
+                file_path_input = input("\nファイルパス > ").strip()
+                
+                if not file_path_input:
+                    logger.warning(" ユーザーがキャンセルしました")
+                    print("\n❌ キャンセルしました")
+                    return False
+                
+                file_path = file_path_input
+                
                 if not os.path.exists(file_path):
                     logger.error(f" ファイルが見つかりません: {file_path}")
+                    print(f"\n❌ エラー: ファイルが見つかりません")
+                    print(f"  パス: {file_path}")
+                    print("\n指定されたファイルパスが正しいか確認してください")
                     return False
+                
+                logger.info(f"✅ ローカルファイルを使用: {file_path}")
             
             # 2. メタデータ抽出
             logger.info(f"メタデータを抽出中...")
