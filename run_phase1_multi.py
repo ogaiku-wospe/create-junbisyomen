@@ -534,21 +534,53 @@ class Phase1MultiRunner:
         print("-"*70)
     
     def get_evidence_number_input(self) -> Optional[List[str]]:
-        """証拠番号の入力取得"""
-        user_input = input("\n証拠番号を入力してください（例: ko70 または ko70-73）: ").strip()
+        """証拠番号の入力取得
+        
+        Examples:
+            ko70-73      -> ['ko70', 'ko71', 'ko72', 'ko73']
+            ko001-005    -> ['ko001', 'ko002', 'ko003', 'ko004', 'ko005']
+            tmp_001-011  -> ['tmp_001', 'tmp_002', ..., 'tmp_011']
+        """
+        user_input = input("\n証拠番号を入力してください（例: ko70 または ko70-73, tmp_001-011）: ").strip()
         
         if not user_input:
             return None
         
-        # 範囲指定の処理（例: ko70-73）
+        # 範囲指定の処理（例: ko70-73, tmp_001-011）
         if '-' in user_input and user_input.count('-') == 1:
             try:
-                prefix = user_input.split('-')[0].rstrip('0123456789')
-                start = int(user_input.split('-')[0][len(prefix):])
-                end = int(user_input.split('-')[1])
-                return [f"{prefix}{i}" for i in range(start, end + 1)]
-            except ValueError:
-                logger.error("❌ 範囲指定の形式が正しくありません")
+                # 範囲の開始と終了を分離
+                start_str, end_str = user_input.split('-')
+                
+                # 開始番号から prefix と数字部分を分離
+                # 例: "tmp_001" -> prefix="tmp_", start_num="001"
+                # 例: "ko70" -> prefix="ko", start_num="70"
+                import re
+                match = re.match(r'^(.+?)(\d+)$', start_str)
+                if not match:
+                    logger.error("❌ 範囲指定の形式が正しくありません（開始番号）")
+                    return None
+                
+                prefix = match.group(1)  # "tmp_" or "ko"
+                start_num_str = match.group(2)  # "001" or "70"
+                
+                # 数値変換
+                start_num = int(start_num_str)
+                end_num = int(end_str)
+                
+                if start_num > end_num:
+                    logger.error("❌ 開始番号は終了番号以下でなければなりません")
+                    return None
+                
+                # ゼロ埋めの桁数を判定（開始番号の桁数を維持）
+                width = len(start_num_str)
+                
+                # 範囲内の証拠番号リストを生成
+                # 例: tmp_001, tmp_002, ..., tmp_011
+                return [f"{prefix}{i:0{width}d}" for i in range(start_num, end_num + 1)]
+                
+            except ValueError as e:
+                logger.error(f"❌ 範囲指定の形式が正しくありません: {e}")
                 return None
         else:
             # 単一証拠番号
