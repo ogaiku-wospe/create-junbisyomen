@@ -345,7 +345,8 @@ class EvidenceOrganizer:
         suggestion = {
             'primary': {
                 'number': default_number,
-                'reason': f"最新の証拠番号の次（{existing['max']}の次）"
+                'reason': f"最新の証拠番号の次（{existing['max']}の次）",
+                'requires_renumbering': False
             },
             'alternatives': []
         }
@@ -360,7 +361,35 @@ class EvidenceOrganizer:
                     suggestion['alternatives'].append({
                         'number': fill_number,
                         'reason': f"欠番を埋める（{gap_start}と{gap_end}の間）",
-                        'gap': (gap_start, gap_end)
+                        'gap': (gap_start, gap_end),
+                        'requires_renumbering': False
+                    })
+        
+        # 既存番号の間に挿入する代替案を追加
+        if existing['numbers']:
+            # 最初の番号の前に挿入
+            if existing['numbers'][0] > 1:
+                suggestion['alternatives'].append({
+                    'number': 1,
+                    'reason': f"最初に挿入（1以降を自動リナンバリング）",
+                    'requires_renumbering': True,
+                    'affected_count': len(existing['numbers'])
+                })
+            
+            # 連続した番号の間に挿入（リナンバリング必要）
+            for i in range(len(existing['numbers']) - 1):
+                current = existing['numbers'][i]
+                next_num = existing['numbers'][i + 1]
+                
+                # 連続している場合のみ（欠番でない）
+                if next_num - current == 1:
+                    insert_pos = next_num
+                    affected_count = len([n for n in existing['numbers'] if n >= insert_pos])
+                    suggestion['alternatives'].append({
+                        'number': insert_pos,
+                        'reason': f"{current}と{next_num}の間に挿入（{insert_pos}以降を自動リナンバリング）",
+                        'requires_renumbering': True,
+                        'affected_count': affected_count
                     })
         
         return suggestion
@@ -416,6 +445,207 @@ class EvidenceOrganizer:
         }
         
         return proposal
+    
+    def get_evidence_files_to_renumber(self, side: str, from_number: int) -> List[Dict]:
+        """リナンバリング対象の証拠ファイルを取得
+        
+        Args:
+            side: "ko" または "otsu"
+            from_number: この番号以降の証拠をリナンバリング
+        
+        Returns:
+            リナンバリング対象のファイルリスト（番号順にソート）
+        """
+        if not os.path.exists("database.json"):
+            return []
+        
+        try:
+            with open("database.json", 'r', encoding='utf-8') as f:
+                database = json.load(f)
+            
+            evidence_list = database.get('evidence', [])
+            prefix = side.lower()
+            
+            # 対象証拠を抽出
+            target_evidence = []
+            for evidence in evidence_list:
+                evidence_id = evidence.get('evidence_id', '')
+                if evidence_id.startswith(prefix):
+                    match = re.match(r'[a-z]+([0-9]+)', evidence_id)
+                    if match:
+                        number = int(match.group(1))
+                        if number >= from_number:
+                            target_evidence.append({
+                                'number': number,
+                                'evidence': evidence,
+                                'evidence_id': evidence_id
+                            })
+            
+            # 番号順にソート（降順：大きい番号から処理）
+            target_evidence.sort(key=lambda x: x['number'], reverse=True)
+            
+            return target_evidence
+            
+        except Exception as e:
+            print(f"❌ リナンバリング対象取得エラー: {e}")
+            return []
+    
+    def renumber_evidence(self, side: str, from_number: int) -> bool:
+        """証拠を一括リナンバリング
+        
+        Args:
+            side: "ko" または "otsu"
+            from_number: この番号以降の証拠を+1リナンバリング
+        
+        Returns:
+            成功: True, 失敗: False
+        """
+        print(f"\n🔄 証拠リナンバリング開始: {side}{from_number:03d}以降")
+        
+        # リナンバリング対象を取得
+        targets = self.get_evidence_files_to_renumber(side, from_number)
+        
+        if not targets:
+            print("✅ リナンバリング対象なし")
+            return True
+        
+        print(f"📋 対象: {len(targets)}件の証拠")
+        for target in targets:
+            old_num = target['number']
+            new_num = old_num + 1
+            print(f"  - {side}{old_num:03d} → {side}{new_num:03d}")
+        
+        # 確認プロンプト
+        confirm = input(f"\n⚠️  {len(targets)}件のファイルをリネームします。実行しますか？ (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("❌ リナンバリングをキャンセルしました")
+            return False
+        
+        service = self.case_manager.get_google_drive_service()
+        if not service:
+            return False
+        
+        # database.jsonを読み込み
+        with open("database.json", 'r', encoding='utf-8') as f:
+            database = json.load(f)
+        
+        success_count = 0
+        
+        # 大きい番号から順に処理（衝突を避ける）
+        for target in targets:
+            old_number = target['number']
+            new_number = old_number + 1
+            evidence = target['evidence']
+            
+            old_id = f"{side}{old_number:03d}"
+            new_id = f"{side}{new_number:03d}"
+            side_kanji = '甲' if side == 'ko' else '乙'
+            new_evidence_number = f"{side_kanji}{new_number:03d}"
+            
+            print(f"\n🔄 処理中: {old_id} → {new_id}")
+            
+            try:
+                # Google Driveのファイルをリネーム
+                gdrive_info = evidence.get('complete_metadata', {}).get('gdrive', {})
+                file_id = gdrive_info.get('file_id')
+                
+                if file_id:
+                    # 現在のファイル名を取得
+                    current_file = service.files().get(
+                        fileId=file_id,
+                        supportsAllDrives=True,
+                        fields='name'
+                    ).execute()
+                    
+                    old_filename = current_file.get('name', '')
+                    
+                    # 新しいファイル名を生成
+                    if old_filename.startswith(old_id):
+                        new_filename = new_id + old_filename[len(old_id):]
+                    else:
+                        # ファイル名が期待と異なる場合
+                        ext = os.path.splitext(old_filename)[1]
+                        new_filename = f"{new_id}_{old_filename}{ext}" if not old_filename.endswith(ext) else f"{new_id}_{old_filename}"
+                    
+                    # ファイルをリネーム
+                    service.files().update(
+                        fileId=file_id,
+                        body={'name': new_filename},
+                        supportsAllDrives=True
+                    ).execute()
+                    
+                    print(f"  ✅ ファイルリネーム: {old_filename} → {new_filename}")
+                    
+                    # database.jsonを更新
+                    evidence['evidence_id'] = new_id
+                    evidence['evidence_number'] = new_evidence_number
+                    
+                    # メタデータのファイル名も更新
+                    if 'complete_metadata' in evidence:
+                        if 'basic' in evidence['complete_metadata']:
+                            evidence['complete_metadata']['basic']['file_name'] = new_filename
+                    
+                    success_count += 1
+                else:
+                    print(f"  ⚠️ ファイルIDが見つかりません: {old_id}")
+                    
+            except Exception as e:
+                print(f"  ❌ エラー: {e}")
+                # エラーが発生しても続行
+        
+        # database.jsonを保存
+        try:
+            database['metadata']['last_updated'] = datetime.now().isoformat()
+            
+            with open("database.json", 'w', encoding='utf-8') as f:
+                json.dump(database, f, ensure_ascii=False, indent=2)
+            
+            print(f"\n✅ database.json更新完了")
+            
+        except Exception as e:
+            print(f"\n❌ database.json保存エラー: {e}")
+            return False
+        
+        print(f"\n✅ リナンバリング完了: {success_count}/{len(targets)}件")
+        return success_count == len(targets)
+    
+    def insert_evidence_with_renumbering(self, insert_number: int, file_info: Dict, proposal: Dict) -> bool:
+        """証拠を挿入し、それ以降をリナンバリング
+        
+        Args:
+            insert_number: 挿入位置の番号
+            file_info: Google Driveファイル情報
+            proposal: 証拠割り当て提案
+        
+        Returns:
+            成功: True, 失敗: False
+        """
+        side = proposal['side']
+        
+        print(f"\n📥 証拠挿入とリナンバリング")
+        print(f"  挿入位置: {side}{insert_number:03d}")
+        print(f"  影響: {side}{insert_number:03d}以降を+1リナンバリング")
+        
+        # まず既存証拠をリナンバリング
+        if not self.renumber_evidence(side, insert_number):
+            print("❌ リナンバリング失敗。証拠挿入を中止します。")
+            return False
+        
+        # 新しい証拠を挿入
+        proposal['evidence_id'] = f"{side}{insert_number:03d}"
+        proposal['evidence_number'] = f"{'甲' if side == 'ko' else '乙'}{insert_number:03d}"
+        
+        # ファイル名を更新
+        ext = os.path.splitext(file_info['name'])[1]
+        base_name = os.path.splitext(proposal['suggested_filename'])[0]
+        parts = base_name.split('_', 1)
+        if len(parts) == 2:
+            proposal['suggested_filename'] = f"{proposal['evidence_id']}_{parts[1]}{ext}"
+        else:
+            proposal['suggested_filename'] = f"{proposal['evidence_id']}{ext}"
+        
+        # ファイルを移動
+        return self.move_file_to_evidence_folder(file_info, proposal)
     
     def move_file_to_evidence_folder(self, file_info: Dict, proposal: Dict) -> bool:
         """ファイルを証拠フォルダに移動してリネーム
@@ -518,32 +748,47 @@ class EvidenceOrganizer:
             
             # 代替案がある場合は表示
             if proposal['number_suggestion']['alternatives']:
-                print(f"\n  📋 代替案（欠番があります）:")
+                print(f"\n  📋 代替案:")
                 for i, alt in enumerate(proposal['number_suggestion']['alternatives'], 1):
                     alt_num = alt['number']
                     side_kanji = '甲' if proposal['side'] == 'ko' else '乙'
-                    print(f"    {i}. {side_kanji}{alt_num:03d} - {alt['reason']}")
+                    renumber_mark = " ⚠️ [リナンバリング必要]" if alt.get('requires_renumbering') else ""
+                    affected = f" (影響: {alt.get('affected_count', 0)}件)" if alt.get('requires_renumbering') else ""
+                    print(f"    {i}. {side_kanji}{alt_num:03d} - {alt['reason']}{renumber_mark}{affected}")
             
             print(f"\n  ファイル名: {proposal['suggested_filename']}")
             print(f"  証拠種別: {proposal['evidence_type']}")
             print(f"  説明: {proposal['description']}")
             
             # ユーザー確認
+            action_type = 'normal'  # 'normal' or 'renumber'
+            
             while True:
                 choice = input(f"\n実行しますか？ (y=実行, e=編集, a=代替案を選択, s=スキップ, q=終了): ").strip().lower()
                 
                 if choice == 'y':
-                    # ファイル移動・リネーム
-                    if self.move_file_to_evidence_folder(file_info, proposal):
-                        organized_count += 1
-                        print(f"✅ 整理完了 ({organized_count}/{len(files)})")
+                    # ファイル移動・リネーム（リナンバリングの有無で分岐）
+                    if action_type == 'renumber':
+                        # リナンバリングして挿入
+                        insert_number = int(re.search(r'\d+', proposal['evidence_id']).group())
+                        if self.insert_evidence_with_renumbering(insert_number, file_info, proposal):
+                            organized_count += 1
+                            print(f"✅ 整理完了（リナンバリング実行） ({organized_count}/{len(files)})")
+                        else:
+                            skipped_count += 1
                     else:
-                        skipped_count += 1
+                        # 通常の移動
+                        if self.move_file_to_evidence_folder(file_info, proposal):
+                            organized_count += 1
+                            print(f"✅ 整理完了 ({organized_count}/{len(files)})")
+                        else:
+                            skipped_count += 1
                     break
                 
                 elif choice == 'e':
                     # 編集モード
                     proposal = self._edit_proposal(proposal)
+                    action_type = 'normal'  # 編集したら通常モードに戻す
                     continue
                 
                 elif choice == 'a':
@@ -552,7 +797,7 @@ class EvidenceOrganizer:
                         print("❌ 代替案がありません")
                         continue
                     
-                    proposal = self._select_alternative(proposal)
+                    proposal, action_type = self._select_alternative(proposal, file_info)
                     continue
                 
                 elif choice == 's':
@@ -599,15 +844,21 @@ class EvidenceOrganizer:
             print(f"❌ ダウンロードエラー: {e}")
             return False
     
-    def _select_alternative(self, proposal: Dict) -> Dict:
-        """代替案を選択"""
+    def _select_alternative(self, proposal: Dict, file_info: Dict) -> Tuple[Dict, str]:
+        """代替案を選択
+        
+        Returns:
+            (更新された提案, アクション: 'normal' or 'renumber')
+        """
         alternatives = proposal['number_suggestion']['alternatives']
         
         print("\n📋 代替案を選択:")
         for i, alt in enumerate(alternatives, 1):
             alt_num = alt['number']
             side_kanji = '甲' if proposal['side'] == 'ko' else '乙'
-            print(f"  {i}. {side_kanji}{alt_num:03d} - {alt['reason']}")
+            renumber_mark = " ⚠️ [リナンバリング必要]" if alt.get('requires_renumbering') else ""
+            affected = f" (影響: {alt.get('affected_count', 0)}件)" if alt.get('requires_renumbering') else ""
+            print(f"  {i}. {side_kanji}{alt_num:03d} - {alt['reason']}{renumber_mark}{affected}")
         
         choice = input("\n番号を選択 (1-{}): ".format(len(alternatives))).strip()
         
@@ -617,10 +868,12 @@ class EvidenceOrganizer:
                 selected = alternatives[idx]
                 number = selected['number']
                 side = proposal['side']
+                requires_renumbering = selected.get('requires_renumbering', False)
                 
                 # 提案を更新
                 proposal['evidence_id'] = f"{side}{number:03d}"
                 proposal['evidence_number'] = f"{'甲' if side == 'ko' else '乙'}{number:03d}"
+                proposal['selected_alternative'] = selected
                 
                 # ファイル名も更新
                 ext = os.path.splitext(proposal['original_filename'])[1]
@@ -633,13 +886,20 @@ class EvidenceOrganizer:
                     new_filename = f"{proposal['evidence_id']}{ext}"
                 proposal['suggested_filename'] = new_filename
                 
-                print(f"\n✅ 代替案を選択: {proposal['evidence_number']}")
+                action = 'renumber' if requires_renumbering else 'normal'
+                
+                if requires_renumbering:
+                    print(f"\n⚠️  選択: {proposal['evidence_number']} (リナンバリングが必要)")
+                else:
+                    print(f"\n✅ 選択: {proposal['evidence_number']}")
+                
+                return proposal, action
             else:
                 print("❌ 無効な番号です")
         except ValueError:
             print("❌ 無効な入力です")
         
-        return proposal
+        return proposal, 'normal'
     
     def _edit_proposal(self, proposal: Dict) -> Dict:
         """提案を編集"""
