@@ -203,6 +203,7 @@ class AIAnalyzerComplete:
 - 法的評価や主観的解釈は一切含めない
 - 訴訟の当事者や事件の詳細は知らない前提で分析
 - あなたは中立的な記録者として振る舞う
+- **日付情報（temporal_information）は必ず詳細に抽出してください**
 
 **出力形式: JSON**
 
@@ -224,37 +225,80 @@ class AIAnalyzerComplete:
   "full_content": {{
     "complete_description": "原文を見なくても完全に理解できる詳細な記述",
     "visual_information": {{
-      "画像の場合": "被写体、背景、色、構図、状態等を完全に記述",
-      "文書の場合": "全文、構造、書式等を完全に記述"
+      "overall_description": "画像全体の客観的説明",
+      "key_elements": ["観察される要素1", "要素2"],
+      "text_in_image": [
+        {{"text": "画像内テキスト", "location": "位置", "size": "サイズ"}}
+      ],
+      "background_details": "背景の客観的説明",
+      "quality_notes": "画質、鮮明度"
     }},
     "textual_content": {{
-      "全文": "...",
-      "構造": "...",
-      "重要箇所": "..."
+      "extracted_text": "文書内の全テキストを正確に抽出",
+      "text_summary": "テキスト内容の客観的要約",
+      "document_structure": "文書の構造",
+      "formatting_notes": "書式、フォント、レイアウト"
     }},
     "ocr_results": {{
-      "抽出テキスト": "...",
-      "信頼度": 0.0-1.0
+      "extracted_text": "OCRで抽出された全テキスト",
+      "confidence": 0.0-1.0
     }}
   }},
   
-  "legal_significance": {{
-    "primary_significance": "主要な法的意義",
-    "supporting_facts": ["事実1", "事実2"],
-    "legal_theories": ["法理論1", "法理論2"],
-    "relevance_to_case": "本件との関連性"
+  "objective_analysis": {{
+    "document_type": "文書種類の客観的分類",
+    "observable_facts": [
+      "証拠から観察できる客観的事実1",
+      "客観的事実2"
+    ],
+    "temporal_information": {{
+      "dates_mentioned": ["日付1（YYYY-MM-DD形式推奨）", "日付2"],
+      "date_context": "各日付の文脈を明確に記載",
+      "timeline": "時系列の客観的整理",
+      "primary_date": "証拠の代表日付（YYYY-MM-DD形式）"
+    }},
+    "parties_mentioned": {{
+      "individuals": ["個人名1", "個人名2"],
+      "organizations": ["組織名1", "組織名2"],
+      "roles_described": "文書内で各当事者の記述"
+    }},
+    "financial_information": {{
+      "amounts": ["金額1", "金額2"],
+      "currency": "通貨単位",
+      "amount_context": "各金額の文脈"
+    }},
+    "identifiers": {{
+      "contract_numbers": ["契約番号等"],
+      "reference_numbers": ["参照番号"],
+      "serial_numbers": ["管理番号等"]
+    }},
+    "signatures_and_seals": {{
+      "signatures": ["署名者名1", "署名者名2"],
+      "seals": ["捺印の種類"],
+      "signature_dates": ["署名日付"],
+      "signature_locations": "署名・捺印の位置"
+    }},
+    "document_state": {{
+      "completeness": "文書の完全性",
+      "modifications": "訂正、削除、追記",
+      "annotations": "手書きメモ、マーカー",
+      "preservation_state": "保存状態"
+    }}
   }},
   
-  "related_facts": {{
-    "timeline": ["時系列1", "時系列2"],
-    "related_parties": ["関係者1", "関係者2"],
-    "related_evidence": ["関連証拠1", "関連証拠2"]
+  "extracted_data": {{
+    "key_terms": ["重要用語1", "用語2"],
+    "definitions": "定義されている用語",
+    "conditions": ["条件1", "条件2"],
+    "obligations": ["義務1", "義務2"],
+    "rights": ["権利1", "権利2"],
+    "exceptions": ["例外規定"]
   }},
   
-  "usage_suggestions": {{
-    "phase2_preparation": "Phase 2での使用方法",
-    "citation_points": ["引用ポイント1", "引用ポイント2"],
-    "argument_strategies": ["主張戦略1", "主張戦略2"]
+  "metadata_analysis": {{
+    "file_properties": "ファイルプロパティ",
+    "creation_metadata": "作成日時、更新日時等",
+    "technical_details": "解像度、ファイルサイズ、形式等"
   }}
 }}
 
