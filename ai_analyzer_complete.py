@@ -141,7 +141,14 @@ class AIAnalyzerComplete:
             # Vision API使用
             # HEIC等の変換済みファイルパスを使用
             actual_file_path = file_content.get('processed_file_path', file_path)
-            return self._analyze_with_vision(actual_file_path, analysis_prompt, file_type)
+            vision_result = self._analyze_with_vision(actual_file_path, analysis_prompt, file_type)
+            
+            # Vision APIがコンテンツポリシーで拒否した場合、テキストベース分析にフォールバック
+            if vision_result is None:
+                logger.info("📝 OCRテキストを使用してテキストベース分析を実行")
+                return self._analyze_with_text(analysis_prompt, file_content)
+            
+            return vision_result
         else:
             # テキストベース分析
             return self._analyze_with_text(analysis_prompt, file_content)
@@ -396,6 +403,13 @@ class AIAnalyzerComplete:
             
             result = response.choices[0].message.content
             logger.debug(f"API応答: {len(result)}文字")
+            
+            # OpenAIのコンテンツポリシー拒否チェック
+            if "I'm sorry, I can't assist with that" in result or "I cannot assist" in result:
+                logger.warning("⚠️ Vision API: コンテンツポリシーにより画像分析が拒否されました")
+                logger.info("📝 OCRテキストを使用したテキストベース分析にフォールバック")
+                # file_pathからfile_contentを取得してテキスト分析
+                return None  # Noneを返してフォールバック処理を促す
             
             return self._parse_ai_response(result)
             
