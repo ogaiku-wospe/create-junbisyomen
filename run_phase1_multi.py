@@ -33,8 +33,9 @@ try:
     from metadata_extractor import MetadataExtractor
     from file_processor import FileProcessor
     from ai_analyzer_complete import AIAnalyzerComplete
+    from evidence_editor_ai import EvidenceEditorAI
 except ImportError as e:
-    print(f"エラー: エラー: モジュールのインポートに失敗しました: {e}")
+    print(f"エラー: モジュールのインポートに失敗しました: {e}")
     print("\n必要なファイル:")
     print("  - global_config.py")
     print("  - case_manager.py")
@@ -42,6 +43,7 @@ except ImportError as e:
     print("  - metadata_extractor.py")
     print("  - file_processor.py")
     print("  - ai_analyzer_complete.py")
+    print("  - evidence_editor_ai.py")
     sys.exit(1)
 
 # ロギング設定
@@ -67,6 +69,7 @@ class Phase1MultiRunner:
         self.metadata_extractor = MetadataExtractor()
         self.file_processor = FileProcessor()
         self.ai_analyzer = AIAnalyzerComplete()
+        self.evidence_editor = EvidenceEditorAI()
     
     def select_case(self) -> bool:
         """事件を選択または新規作成
@@ -531,6 +534,7 @@ class Phase1MultiRunner:
         print("  6. 事件を切り替え")
         print("  7. 並び替え・確定 (整理済み_未確定 -> 甲号証)")
         print("  8. AI分析で日付抽出・自動ソート (未確定証拠)")
+        print("  10. AI対話形式で証拠内容を改善")
         print("  9. 終了")
         print("-"*70)
     
@@ -1220,6 +1224,72 @@ class Phase1MultiRunner:
         
         print("\n" + "="*70)
     
+    def edit_evidence_with_ai(self):
+        """AI対話形式で証拠内容を編集"""
+        if not self.current_case:
+            raise ValueError("事件が選択されていません")
+        
+        print("\n" + "="*70)
+        print("  AI対話形式で証拠内容を改善")
+        print("="*70)
+        
+        # 証拠番号を入力
+        evidence_numbers = self.get_evidence_number_input()
+        if not evidence_numbers:
+            print("\nキャンセルしました")
+            return
+        
+        # 1件ずつ処理
+        for evidence_number in evidence_numbers:
+            print(f"\n処理中: {evidence_number}")
+            
+            # データベースから証拠データを取得
+            database = self.db_manager.read_database()
+            evidence_data = None
+            
+            for evidence in database.get('evidence', []):
+                # evidence_id または temp_id で検索
+                if (evidence.get('evidence_id') == evidence_number or 
+                    evidence.get('temp_id') == evidence_number or
+                    evidence.get('evidence_number') == evidence_number):
+                    evidence_data = evidence
+                    break
+            
+            if not evidence_data:
+                print(f"\nエラー: 証拠 {evidence_number} が見つかりません")
+                continue
+            
+            # AI分析結果が存在するか確認
+            if 'phase1_complete_analysis' not in evidence_data:
+                print(f"\nエラー: {evidence_number} はまだAI分析されていません")
+                print("  先にメニュー「2」または「3」で分析を実行してください")
+                continue
+            
+            # AI対話形式で編集
+            modified_data = self.evidence_editor.edit_evidence_interactive(
+                evidence_data,
+                self.db_manager
+            )
+            
+            # 編集がキャンセルされた場合
+            if modified_data is None:
+                print(f"\n{evidence_number} の編集をキャンセルしました")
+                continue
+            
+            # データベースを更新
+            print(f"\n{evidence_number} をデータベースに保存中...")
+            
+            for i, evidence in enumerate(database['evidence']):
+                if (evidence.get('evidence_id') == evidence_number or 
+                    evidence.get('temp_id') == evidence_number or
+                    evidence.get('evidence_number') == evidence_number):
+                    database['evidence'][i] = modified_data
+                    break
+            
+            # 保存
+            self.db_manager.write_database(database)
+            print(f"✅ {evidence_number} の変更を保存しました")
+    
     def run(self):
         """メイン実行ループ"""
         # 最初に事件を選択
@@ -1230,7 +1300,7 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択してください (1-9): ").strip()
+            choice = input("\n選択してください (1-10, 9で終了): ").strip()
             
             if choice == '1':
                 # 証拠整理（未分類フォルダから自動整理）
@@ -1292,7 +1362,16 @@ class Phase1MultiRunner:
                 try:
                     self.analyze_and_sort_pending_evidence()
                 except Exception as e:
-                    print(f"\n❌ エラーが発生しました: {str(e)}")
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    
+            elif choice == '10':
+                # AI対話形式で証拠内容を改善
+                try:
+                    self.edit_evidence_with_ai()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     
@@ -1302,7 +1381,7 @@ class Phase1MultiRunner:
                 break
                 
             else:
-                print("\n❌ 無効な選択です。1-9の番号を入力してください。")
+                print("\nエラー: 無効な選択です。1-10の番号を入力してください（9で終了）。")
             
             input("\nEnterキーを押して続行...")
 
