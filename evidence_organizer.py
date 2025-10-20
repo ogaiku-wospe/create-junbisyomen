@@ -249,68 +249,29 @@ class EvidenceOrganizer:
             return []
     
     def analyze_file_content(self, file_info: Dict, local_path: str) -> Dict:
-        """AIを使用してファイル内容を分析
+        """ファイル内容を分析（後で実装予定）
         
         Args:
             file_info: Google Driveファイル情報
             local_path: ローカルファイルパス
         
         Returns:
-            分析結果（証拠種別、推奨番号、ファイル名提案等）
+            分析結果（元のファイル名を保持）
         """
-        print(f"\n🤖 AI分析中: {file_info['name']}")
+        # ファイル名からの推測は困難なため、元のファイル名をそのまま使用
+        # 将来的にはAI分析を実装予定
+        filename = file_info['name']
         
-        try:
-            # AIに証拠内容を分析させるプロンプト
-            analysis_prompt = """
-このファイルは民事訴訟の証拠です。以下の情報を抽出してください：
-
-1. 証拠種別（診断書、契約書、メール、SNS投稿、写真、請求書、領収書、その他）
-2. 簡潔な内容の説明（30文字以内）
-3. 原告側の証拠か被告側の証拠か（不明の場合は原告側と推定）
-4. 重要度（高・中・低）
-5. 推奨ファイル名（証拠種別_簡潔な説明.拡張子）
-
-以下のJSON形式で回答してください：
-{
-  "evidence_type": "診断書",
-  "description": "適応障害の診断書",
-  "side": "plaintiff",
-  "importance": "high",
-  "suggested_filename": "診断書_適応障害.pdf"
-}
-"""
-            
-            # 簡易分析（実際のAI分析は既存のai_analyzer_completeを使用）
-            file_type = self._detect_file_type(local_path)
-            
-            # ファイル名から推測
-            filename = file_info['name']
-            analysis = {
-                "evidence_type": self._guess_evidence_type(filename),
-                "description": self._extract_description(filename),
-                "side": "plaintiff",  # デフォルトは原告側
-                "importance": "medium",
-                "suggested_filename": self._generate_suggested_filename(filename),
-                "confidence": 0.7
-            }
-            
-            print(f"  📋 証拠種別: {analysis['evidence_type']}")
-            print(f"  📝 説明: {analysis['description']}")
-            print(f"  💡 推奨ファイル名: {analysis['suggested_filename']}")
-            
-            return analysis
-            
-        except Exception as e:
-            print(f"❌ AI分析エラー: {e}")
-            return {
-                "evidence_type": "その他",
-                "description": "不明",
-                "side": "plaintiff",
-                "importance": "medium",
-                "suggested_filename": file_info['name'],
-                "confidence": 0.3
-            }
+        analysis = {
+            "evidence_type": "証拠",  # 汎用的な名称
+            "description": os.path.splitext(filename)[0],  # 拡張子を除いた名前
+            "side": "plaintiff",  # デフォルトは原告側
+            "importance": "medium",
+            "suggested_filename": filename,  # 元のファイル名を使用
+            "confidence": 1.0
+        }
+        
+        return analysis
     
     def _detect_file_type(self, file_path: str) -> str:
         """ファイル形式を検出"""
@@ -528,11 +489,9 @@ class EvidenceOrganizer:
         # 仮番号ID
         temp_id = f"tmp_{temp_number:03d}"
         
-        # ファイル名提案
-        ext = os.path.splitext(file_info['name'])[1]
-        suggested_filename = f"{temp_id}_{analysis['suggested_filename']}"
-        if not suggested_filename.endswith(ext):
-            suggested_filename = os.path.splitext(suggested_filename)[0] + ext
+        # ファイル名提案: tmp_001_元のファイル名.拡張子
+        original_filename = file_info['name']
+        suggested_filename = f"{temp_id}_{original_filename}"
         
         proposal = {
             "temp_id": temp_id,
@@ -952,52 +911,19 @@ class EvidenceOrganizer:
                 skipped_count += 1
                 continue
             
-            # AI分析
+            # AI分析（現在は簡易版）
             analysis = self.analyze_file_content(file_info, local_path)
             
             # 証拠番号の提案
             proposal = self.propose_evidence_assignment(file_info, analysis)
             
-            print(f"\n💡 提案:")
-            print(f"  仮番号: {proposal['temp_id']}")
-            print(f"  移動先: 整理済み_未確定フォルダ")
-            print(f"  ファイル名: {proposal['suggested_filename']}")
-            print(f"  証拠種別: {proposal['evidence_type']}")
-            print(f"  説明: {proposal['description']}")
-            print(f"  状態: {proposal['status']} (後で並び替え・確定が必要)")
-            
-            # ユーザー確認
-            while True:
-                choice = input(f"\n実行しますか？ (y=実行, e=編集, s=スキップ, q=終了): ").strip().lower()
-                
-                if choice == 'y':
-                    # 整理済み_未確定フォルダに移動
-                    if self.move_file_to_pending_folder(file_info, proposal):
-                        organized_count += 1
-                        print(f"✅ 整理完了 ({organized_count}/{len(files)})")
-                    else:
-                        skipped_count += 1
-                    break
-                
-                elif choice == 'e':
-                    # 編集モード
-                    proposal = self._edit_proposal(proposal)
-                    continue
-                
-                elif choice == 's':
-                    print("⏭️ スキップしました")
-                    skipped_count += 1
-                    break
-                
-                elif choice == 'q':
-                    print("\n👋 証拠整理を終了します")
-                    print(f"\n📊 結果:")
-                    print(f"  整理済み: {organized_count}件")
-                    print(f"  スキップ: {skipped_count}件")
-                    return
-                
-                else:
-                    print("❌ 無効な選択です")
+            # 自動的に整理済み_未確定フォルダに移動
+            if self.move_file_to_pending_folder(file_info, proposal):
+                organized_count += 1
+                print(f"✅ {proposal['temp_id']}_{file_info['name']} → 整理済み_未確定 ({organized_count}/{len(files)})")
+            else:
+                skipped_count += 1
+                print(f"❌ 移動失敗: {file_info['name']}")
         
         print("\n" + "="*70)
         print("  証拠整理完了")
