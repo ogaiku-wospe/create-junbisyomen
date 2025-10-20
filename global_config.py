@@ -85,7 +85,9 @@ DISABLE_CONTENT_POLICY_CHECK = os.getenv("DISABLE_CONTENT_POLICY_CHECK", "true")
 
 # Anthropic Claude API設定（OpenAI Vision API拒否時のフォールバック用）
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet (最新)
+ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet v2 (最新)
+# フォールバックモデル（利用可能なモデル）
+ANTHROPIC_MODEL_FALLBACK = "claude-3-5-sonnet-20240620"  # Claude 3.5 Sonnet v1
 ANTHROPIC_MAX_TOKENS = 16000
 ANTHROPIC_TEMPERATURE = 0.1  # 一貫性重視
 

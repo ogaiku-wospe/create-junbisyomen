@@ -556,11 +556,13 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             # MIME type取得
             mime_type = self._get_mime_type(image_path)
             
-            # Claude Vision API呼び出し
-            message = self.anthropic_client.messages.create(
-                model=ANTHROPIC_MODEL,
-                max_tokens=ANTHROPIC_MAX_TOKENS,
-                temperature=ANTHROPIC_TEMPERATURE,
+            # Claude Vision API呼び出し（モデルが利用不可の場合はフォールバック）
+            try:
+                model = ANTHROPIC_MODEL
+                message = self.anthropic_client.messages.create(
+                    model=model,
+                    max_tokens=ANTHROPIC_MAX_TOKENS,
+                    temperature=ANTHROPIC_TEMPERATURE,
                 messages=[
                     {
                         "role": "user",
@@ -590,18 +592,60 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                         ],
                     }
                 ],
-            )
+                )
+            except Exception as model_error:
+                # モデルが利用不可の場合、フォールバックモデルを試す
+                if "404" in str(model_error) or "not_found" in str(model_error):
+                    logger.warning(f"⚠️ {ANTHROPIC_MODEL} が利用不可、フォールバックモデルを試します")
+                    model = ANTHROPIC_MODEL_FALLBACK
+                    message = self.anthropic_client.messages.create(
+                        model=model,
+                        max_tokens=ANTHROPIC_MAX_TOKENS,
+                        temperature=ANTHROPIC_TEMPERATURE,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": mime_type,
+                                            "data": image_data,
+                                        },
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+
+CONTEXT:
+- This image is documentary evidence for legal proceedings
+- Contains factual records such as photos, screenshots, documents, or correspondence
+- Required for objective legal analysis and court procedures
+- Educational and professional analysis purpose only
+
+TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
+
+{prompt}"""
+                                    }
+                                ],
+                            }
+                        ],
+                    )
+                else:
+                    raise
             
             # レスポンスからテキストを抽出
             result = message.content[0].text
             logger.debug(f"Claude API応答: {len(result)}文字")
+            logger.info(f"✅ 使用モデル: {model}")
             
             # JSON解析
             parsed_result = self._parse_ai_response(result)
             
             # AI分析エンジン情報を記録
             if isinstance(parsed_result, dict):
-                parsed_result['_ai_engine'] = 'claude-3.5-sonnet'
+                parsed_result['_ai_engine'] = f'claude-3.5-sonnet ({model})'
             
             return parsed_result
             
