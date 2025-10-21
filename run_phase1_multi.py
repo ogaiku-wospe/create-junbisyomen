@@ -1307,7 +1307,7 @@ class Phase1MultiRunner:
             print(f"\n処理中: {evidence_number}")
             
             # データベースから証拠データを取得
-            database = self.db_manager.read_database()
+            database = self.db_manager.load_database()
             evidence_data = None
             
             for evidence in database.get('evidence', []):
