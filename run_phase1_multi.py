@@ -543,20 +543,20 @@ class Phase1MultiRunner:
         """証拠番号の入力取得
         
         Examples:
-            ko70-73      -> ['ko70', 'ko71', 'ko72', 'ko73']
-            ko001-005    -> ['ko001', 'ko002', 'ko003', 'ko004', 'ko005']
+            tmp_070-073  -> ['tmp_070', 'tmp_071', 'tmp_072', 'tmp_073']
+            tmp_001-005  -> ['tmp_001', 'tmp_002', 'tmp_003', 'tmp_004', 'tmp_005']
             tmp_001-011  -> ['tmp_001', 'tmp_002', ..., 'tmp_011']
         """
         print("\n証拠番号の入力")
-        print("  単一指定: ko70, tmp_001")
-        print("  範囲指定: ko70-73, tmp_001-011")
+        print("  単一指定: tmp_001, tmp_020")
+        print("  範囲指定: tmp_001-011, tmp_020-030")
         print("  キャンセル: 空Enter")
         user_input = input("\n> ").strip()
         
         if not user_input:
             return None
         
-        # 範囲指定の処理（例: ko70-73, tmp_001-011）
+        # 範囲指定の処理（例: tmp_001-011, tmp_020-030）
         if '-' in user_input and user_input.count('-') == 1:
             try:
                 # 範囲の開始と終了を分離
@@ -564,13 +564,13 @@ class Phase1MultiRunner:
                 
                 # 開始番号から prefix と数字部分を分離
                 # 例: "tmp_001" -> prefix="tmp_", start_num="001"
-                # 例: "ko70" -> prefix="ko", start_num="70"
+                # 例: "tmp_020" -> prefix="tmp_", start_num="020"
                 import re
                 match = re.match(r'^(.+?)(\d+)$', start_str)
                 if not match:
                     logger.error("範囲指定の形式が正しくありません（開始番号）")
                     print("\nエラー: 範囲指定の形式が正しくありません")
-                    print("  正しい例: ko001-005, tmp_001-011")
+                    print("  正しい例: tmp_001-011, tmp_020-030")
                     print(f"  入力値: {user_input}")
                     return None
                 
@@ -603,7 +603,7 @@ class Phase1MultiRunner:
             except ValueError as e:
                 logger.error(f"範囲指定の形式が正しくありません: {e}")
                 print("\nエラー: 範囲指定の形式が正しくありません")
-                print("  正しい例: ko001-005, tmp_001-011")
+                print("  正しい例: tmp_001-011, tmp_020-030")
                 print(f"  詳細: {e}")
                 return None
         else:
@@ -654,7 +654,7 @@ class Phase1MultiRunner:
         """database.jsonから証拠のGoogle Drive情報を取得
         
         Args:
-            evidence_number: 証拠番号（例: ko001, 甲001, tmp_001）
+            evidence_number: 証拠番号（例: tmp_001, tmp_020）
         
         Returns:
             Google Driveファイル情報（見つからない場合はNone）
@@ -662,7 +662,7 @@ class Phase1MultiRunner:
         try:
             database = self.load_database()
             
-            # 証拠番号を正規化（ko001, 甲001 → ko001で統一）
+            # 証拠番号を正規化（甲001 → ko001で統一）
             normalized_number = evidence_number
             if evidence_number.startswith('甲'):
                 normalized_number = f"ko{evidence_number[1:]}"
@@ -671,7 +671,7 @@ class Phase1MultiRunner:
             
             # データベースから証拠を検索
             # 1. evidence_id で検索（確定済み証拠: ko001, ko002...）
-            # 2. temp_id で検索（未確定証拠: tmp_001, tmp_002...）
+            # 2. temp_id で検索（整理済み_未確定: tmp_001, tmp_002...）
             for evidence in database.get('evidence', []):
                 # 確定済み証拠の検索
                 if evidence.get('evidence_id') == normalized_number:
@@ -742,7 +742,7 @@ class Phase1MultiRunner:
         """証拠の処理（完全版）
         
         Args:
-            evidence_number: 証拠番号（例: ko70）
+            evidence_number: 証拠番号（例: tmp_001）
             gdrive_file_info: Google Driveファイル情報（オプション）
             
         Returns:
@@ -1007,7 +1007,7 @@ class Phase1MultiRunner:
                 
                 # 新しいファイル名を生成
                 old_filename = evidence['renamed_filename']
-                # tmp_001_ の部分を ko001_ に置換
+                # tmp_XXX_ の部分を koXXX_ に置換
                 new_filename = old_filename.replace(evidence['temp_id'], ko_id)
                 
                 # ファイルを移動してリネーム
@@ -1063,7 +1063,7 @@ class Phase1MultiRunner:
         print("\n【処理内容】")
         print("  1. 各証拠から作成年月日を取得（既に分析済みならdocument_dateを使用）")
         print("  2. 作成年月日順に自動ソート（古い順）")
-        print("  3. ソート後の順序で確定番号（ko001, ko002...）を割り当て")
+        print("  3. ソート後の順序で確定番号（ko001, ko002, ko003...）を割り当て")
         print("  4. 整理済み_未確定 → 甲号証 フォルダへ移動")
         
         confirm = input("\n処理を開始しますか？ (y/n): ").strip().lower()
@@ -1205,7 +1205,7 @@ class Phase1MultiRunner:
                 
                 # 新しいファイル名を生成
                 old_filename = evidence['renamed_filename']
-                # tmp_001_ の部分を ko001_ に置換
+                # tmp_XXX_ の部分を koXXX_ に置換
                 new_filename = old_filename.replace(evidence['temp_id'], ko_id)
                 
                 # ファイルを移動してリネーム
