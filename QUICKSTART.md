@@ -2,6 +2,10 @@
 
 準備書面作成支援システムを**5分で**始められます！
 
+> **⚠️ 重要**: 初めて起動する場合、まず **`bash setup.sh`** を実行してください！
+> 
+> これで依存パッケージが自動インストールされます。
+
 ## 📋 目次
 
 1. [最初の起動（3ステップ）](#最初の起動3ステップ)
@@ -14,10 +18,18 @@
 
 ### ステップ1️⃣: セットアップスクリプトを実行
 
-**macOS/Linux:**
+**⚡ macOS/Linuxの場合（推奨）:**
 ```bash
+# ターミナルで実行
 cd create-junbisyomen
 bash setup.sh
+```
+
+**手動インストールの場合:**
+```bash
+cd create-junbisyomen
+pip3 install -r requirements.txt
+cp .env.example .env
 ```
 
 **Windows:**
@@ -179,17 +191,26 @@ sudo apt-get install python3 python3-pip
 
 ---
 
-### ❌ "ModuleNotFoundError: No module named 'openai'"
+### ❌ "No module named 'google_auth_oauthlib'" または "No module named 'openai'"
 
 **原因**: 依存パッケージがインストールされていない
 
-**解決方法**:
+**⚡ 推奨解決方法（自動インストール）**:
+```bash
+cd create-junbisyomen
+bash setup.sh
+```
+
+**手動インストールの場合**:
 ```bash
 cd create-junbisyomen
 pip3 install -r requirements.txt
 ```
 
-または `setup.sh` / `setup.bat` を実行してください
+> 💡 **このエラーが出た場合は必ず `setup.sh` を実行してください！**
+> 
+> `start.sh` や `python3 run_phase1_multi.py` を実行する前に、
+> まず `bash setup.sh` で依存パッケージをインストールする必要があります。
 
 ---
 
