@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Phase 1完全版システム - マルチ事件対応版
+Phase1_Evidence Analysis System - マルチ事件対応版
 
 【概要】
 大元の共有ドライブIDのみを設定し、複数事件を並行管理できるシステムです。
@@ -78,7 +78,7 @@ class Phase1MultiRunner:
             選択成功: True, キャンセル: False
         """
         print("\n" + "="*70)
-        print("  Phase 1完全版システム - 事件選択")
+        print("  Phase1_Evidence Analysis System - 事件選択")
         print("="*70)
         
         # 事件を検出
@@ -203,65 +203,115 @@ class Phase1MultiRunner:
             case_folder_id = case_folder['id']
             print(f"  ✅ 事件フォルダ作成: {case_folder_name}")
             
-            # 甲号証フォルダを作成
-            ko_folder_metadata = {
-                'name': '甲号証',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            ko_folder = service.files().create(
-                body=ko_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 甲号証フォルダ作成")
-            
-            # 乙号証フォルダを作成
-            otsu_folder_metadata = {
-                'name': '乙号証',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            otsu_folder = service.files().create(
-                body=otsu_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 乙号証フォルダ作成")
-            
-            # 未分類フォルダを作成
-            unclassified_folder_metadata = {
-                'name': '未分類',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            unclassified_folder = service.files().create(
-                body=unclassified_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 未分類フォルダ作成")
-            
-            # 整理済み_未確定フォルダを作成
-            pending_folder_metadata = {
-                'name': '整理済み_未確定',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            pending_folder = service.files().create(
-                body=pending_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 整理済み_未確定フォルダ作成")
+            # 階層的フォルダ構造を作成
+            if gconfig.USE_HIERARCHICAL_FOLDERS:
+                print(f"  📁 階層的フォルダ構造を作成中...")
+                
+                # 甲号証ルートフォルダを作成
+                ko_folder_metadata = {
+                    'name': '甲号証',
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [case_folder_id]
+                }
+                
+                ko_folder = service.files().create(
+                    body=ko_folder_metadata,
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                ko_folder_id = ko_folder['id']
+                print(f"    ✅ 甲号証フォルダ作成")
+                
+                # 甲号証配下にサブフォルダを作成
+                ko_subfolders = {}
+                for status_key, folder_name in [('confirmed', '確定済み'), ('pending', '整理済み_未確定'), ('unclassified', '未分類')]:
+                    subfolder = service.files().create(
+                        body={
+                            'name': folder_name,
+                            'mimeType': 'application/vnd.google-apps.folder',
+                            'parents': [ko_folder_id]
+                        },
+                        supportsAllDrives=True,
+                        fields='id, name'
+                    ).execute()
+                    ko_subfolders[status_key] = subfolder['id']
+                    print(f"      ✅ 甲号証/{folder_name}")
+                
+                # 乙号証ルートフォルダを作成
+                otsu_folder_metadata = {
+                    'name': '乙号証',
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [case_folder_id]
+                }
+                
+                otsu_folder = service.files().create(
+                    body=otsu_folder_metadata,
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                otsu_folder_id = otsu_folder['id']
+                print(f"    ✅ 乙号証フォルダ作成")
+                
+                # 乙号証配下にサブフォルダを作成
+                otsu_subfolders = {}
+                for status_key, folder_name in [('confirmed', '確定済み'), ('pending', '整理済み_未確定'), ('unclassified', '未分類')]:
+                    subfolder = service.files().create(
+                        body={
+                            'name': folder_name,
+                            'mimeType': 'application/vnd.google-apps.folder',
+                            'parents': [otsu_folder_id]
+                        },
+                        supportsAllDrives=True,
+                        fields='id, name'
+                    ).execute()
+                    otsu_subfolders[status_key] = subfolder['id']
+                    print(f"      ✅ 乙号証/{folder_name}")
+            else:
+                # 旧形式のフラットな構造（後方互換性のため残す）
+                ko_folder = service.files().create(
+                    body={
+                        'name': '甲号証',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                otsu_folder = service.files().create(
+                    body={
+                        'name': '乙号証',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                # 未分類・整理済み_未確定フォルダ（事件フォルダ直下）
+                service.files().create(
+                    body={
+                        'name': '未分類',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                service.files().create(
+                    body={
+                        'name': '整理済み_未確定',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                print(f"  ✅ 旧形式フォルダ構造作成完了")
             
             # 事件情報を一時設定（database作成のため）
             temp_case_info = {
@@ -299,6 +349,14 @@ class Phase1MultiRunner:
                 'otsu_evidence_folder_id': otsu_folder['id'],
                 'case_folder_url': case_folder.get('webViewLink', '')
             }
+            
+            # 階層的構造の場合はサブフォルダ情報を追加
+            if gconfig.USE_HIERARCHICAL_FOLDERS:
+                self.current_case['folder_structure'] = 'hierarchical'
+                self.current_case['ko_folders'] = ko_subfolders
+                self.current_case['otsu_folders'] = otsu_subfolders
+            else:
+                self.current_case['folder_structure'] = 'legacy'
             
             # データベースマネージャーを初期化
             self.db_manager = create_database_manager(self.case_manager, self.current_case)
@@ -522,39 +580,65 @@ class Phase1MultiRunner:
             return
         
         print("\n" + "="*70)
-        print(f"  Phase 1完全版システム - 証拠管理")
+        print(f"  Phase1_Evidence Analysis System - 証拠管理")
         print(f"  事件: {self.current_case['case_name']}")
         print("="*70)
         print("\n【証拠の整理・分析】")
         print("  1. 証拠整理 (未分類フォルダ → 整理済み_未確定)")
-        print("  2. 証拠分析 (番号指定: ko70, tmp_001 / 範囲指定: ko70-73)")
+        print("  2. 証拠分析 (番号指定: tmp_001 / 範囲指定: tmp_001-011)")
         print("  3. AI対話形式で分析内容を改善")
         print("\n【証拠の確定・管理】")
-        print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証)")
+        print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証/乙号証)")
+        print("\n【証拠の閲覧】")
+        print("  5. 証拠分析一覧を表示")
+        print("  6. 証拠一覧をエクスポート（CSV/Excel）")
         print("\n【システム管理】")
-        print("  5. database.jsonの状態確認")
-        print("  6. 事件を切り替え")
+        print("  7. database.jsonの状態確認")
+        print("  8. 事件を切り替え")
         print("  9. 終了")
         print("-"*70)
     
-    def get_evidence_number_input(self) -> Optional[List[str]]:
+    def select_evidence_type(self) -> Optional[str]:
+        """証拠種別を選択
+        
+        Returns:
+            'ko': 甲号証, 'otsu': 乙号証, None: キャンセル
+        """
+        print("\n証拠種別を選択してください:")
+        print("  1. 甲号証（こちらの証拠）")
+        print("  2. 乙号証（相手方の証拠）")
+        print("  3. キャンセル")
+        
+        choice = input("\n> ").strip()
+        
+        if choice == '1':
+            return 'ko'
+        elif choice == '2':
+            return 'otsu'
+        else:
+            return None
+    
+    def get_evidence_number_input(self, evidence_type: str = 'ko') -> Optional[List[str]]:
         """証拠番号の入力取得
         
+        Args:
+            evidence_type: 'ko' または 'otsu'
+        
         Examples:
-            ko70-73      -> ['ko70', 'ko71', 'ko72', 'ko73']
-            ko001-005    -> ['ko001', 'ko002', 'ko003', 'ko004', 'ko005']
+            tmp_070-073  -> ['tmp_070', 'tmp_071', 'tmp_072', 'tmp_073']
+            tmp_001-005  -> ['tmp_001', 'tmp_002', 'tmp_003', 'tmp_004', 'tmp_005']
             tmp_001-011  -> ['tmp_001', 'tmp_002', ..., 'tmp_011']
         """
         print("\n証拠番号の入力")
-        print("  単一指定: ko70, tmp_001")
-        print("  範囲指定: ko70-73, tmp_001-011")
+        print("  単一指定: tmp_001, tmp_020")
+        print("  範囲指定: tmp_001-011, tmp_020-030")
         print("  キャンセル: 空Enter")
         user_input = input("\n> ").strip()
         
         if not user_input:
             return None
         
-        # 範囲指定の処理（例: ko70-73, tmp_001-011）
+        # 範囲指定の処理（例: tmp_001-011, tmp_020-030）
         if '-' in user_input and user_input.count('-') == 1:
             try:
                 # 範囲の開始と終了を分離
@@ -562,13 +646,13 @@ class Phase1MultiRunner:
                 
                 # 開始番号から prefix と数字部分を分離
                 # 例: "tmp_001" -> prefix="tmp_", start_num="001"
-                # 例: "ko70" -> prefix="ko", start_num="70"
+                # 例: "tmp_020" -> prefix="tmp_", start_num="020"
                 import re
                 match = re.match(r'^(.+?)(\d+)$', start_str)
                 if not match:
                     logger.error("範囲指定の形式が正しくありません（開始番号）")
                     print("\nエラー: 範囲指定の形式が正しくありません")
-                    print("  正しい例: ko001-005, tmp_001-011")
+                    print("  正しい例: tmp_001-011, tmp_020-030")
                     print(f"  入力値: {user_input}")
                     return None
                 
@@ -601,7 +685,7 @@ class Phase1MultiRunner:
             except ValueError as e:
                 logger.error(f"範囲指定の形式が正しくありません: {e}")
                 print("\nエラー: 範囲指定の形式が正しくありません")
-                print("  正しい例: ko001-005, tmp_001-011")
+                print("  正しい例: tmp_001-011, tmp_020-030")
                 print(f"  詳細: {e}")
                 return None
         else:
@@ -648,11 +732,12 @@ class Phase1MultiRunner:
             logger.error(f" Google Drive検索エラー: {e}")
             return []
     
-    def _get_gdrive_info_from_database(self, evidence_number: str) -> Optional[Dict]:
+    def _get_gdrive_info_from_database(self, evidence_number: str, evidence_type: str = 'ko') -> Optional[Dict]:
         """database.jsonから証拠のGoogle Drive情報を取得
         
         Args:
-            evidence_number: 証拠番号（例: ko001, 甲001, tmp_001）
+            evidence_number: 証拠番号（例: tmp_001, tmp_020）
+            evidence_type: 証拠種別 ('ko' または 'otsu')
         
         Returns:
             Google Driveファイル情報（見つからない場合はNone）
@@ -660,7 +745,7 @@ class Phase1MultiRunner:
         try:
             database = self.load_database()
             
-            # 証拠番号を正規化（ko001, 甲001 → ko001で統一）
+            # 証拠番号を正規化（甲001 → ko001で統一）
             normalized_number = evidence_number
             if evidence_number.startswith('甲'):
                 normalized_number = f"ko{evidence_number[1:]}"
@@ -669,11 +754,19 @@ class Phase1MultiRunner:
             
             # データベースから証拠を検索
             # 1. evidence_id で検索（確定済み証拠: ko001, ko002...）
-            # 2. temp_id で検索（未確定証拠: tmp_001, tmp_002...）
+            # 2. temp_id で検索（整理済み_未確定: tmp_001, tmp_002...）
             for evidence in database.get('evidence', []):
                 # 確定済み証拠の検索
                 if evidence.get('evidence_id') == normalized_number:
+                    # Google DriveファイルIDを取得（複数の場所をチェック）
                     gdrive_file_id = evidence.get('gdrive_file_id')
+                    
+                    # gdrive_file_idがない場合、complete_metadata.gdrive.file_idをチェック
+                    if not gdrive_file_id:
+                        metadata = evidence.get('complete_metadata', {})
+                        gdrive_info = metadata.get('gdrive', {})
+                        gdrive_file_id = gdrive_info.get('file_id')
+                    
                     if not gdrive_file_id:
                         logger.warning(f" 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
                         return None
@@ -694,7 +787,15 @@ class Phase1MultiRunner:
                 
                 # 未確定証拠の検索（temp_id: tmp_001, tmp_002...）
                 if evidence.get('temp_id') == evidence_number:
+                    # Google DriveファイルIDを取得（複数の場所をチェック）
                     gdrive_file_id = evidence.get('gdrive_file_id')
+                    
+                    # gdrive_file_idがない場合、complete_metadata.gdrive.file_idをチェック
+                    if not gdrive_file_id:
+                        metadata = evidence.get('complete_metadata', {})
+                        gdrive_info = metadata.get('gdrive', {})
+                        gdrive_file_id = gdrive_info.get('file_id')
+                    
                     if not gdrive_file_id:
                         logger.warning(f" 証拠 {evidence_number} のGoogle DriveファイルIDが見つかりません")
                         return None
@@ -720,12 +821,13 @@ class Phase1MultiRunner:
             logger.error(f" database.json読み込みエラー: {e}")
             return None
     
-    def process_evidence(self, evidence_number: str, gdrive_file_info: Dict = None) -> bool:
+    def process_evidence(self, evidence_number: str, gdrive_file_info: Dict = None, evidence_type: str = 'ko') -> bool:
         """証拠の処理（完全版）
         
         Args:
-            evidence_number: 証拠番号（例: ko70）
+            evidence_number: 証拠番号（例: tmp_001）
             gdrive_file_info: Google Driveファイル情報（オプション）
+            evidence_type: 証拠種別 ('ko' または 'otsu')
             
         Returns:
             処理成功: True, 失敗: False
@@ -747,11 +849,32 @@ class Phase1MultiRunner:
                     return False
             else:
                 # ローカルファイルパスを使用
-                logger.warning(" Google Drive情報がありません。ローカルファイルを探します。")
-                file_path = f"/tmp/{evidence_number}_sample.pdf"
+                logger.warning(" Google Drive情報がありません。ローカルファイルを指定してください。")
+                print("\n" + "="*70)
+                print(f"  証拠 {evidence_number} のファイルパスを入力してください")
+                print("="*70)
+                print("\n例:")
+                print("  /home/user/webapp/evidence_files/tmp_020.pdf")
+                print("  /tmp/sample.pdf")
+                print("\nキャンセル: 空Enter")
+                
+                file_path_input = input("\nファイルパス > ").strip()
+                
+                if not file_path_input:
+                    logger.warning(" ユーザーがキャンセルしました")
+                    print("\n❌ キャンセルしました")
+                    return False
+                
+                file_path = file_path_input
+                
                 if not os.path.exists(file_path):
                     logger.error(f" ファイルが見つかりません: {file_path}")
+                    print(f"\n❌ エラー: ファイルが見つかりません")
+                    print(f"  パス: {file_path}")
+                    print("\n指定されたファイルパスが正しいか確認してください")
                     return False
+                
+                logger.info(f"✅ ローカルファイルを使用: {file_path}")
             
             # 2. メタデータ抽出
             logger.info(f"メタデータを抽出中...")
@@ -968,7 +1091,7 @@ class Phase1MultiRunner:
                 
                 # 新しいファイル名を生成
                 old_filename = evidence['renamed_filename']
-                # tmp_001_ の部分を ko001_ に置換
+                # tmp_XXX_ の部分を koXXX_ に置換
                 new_filename = old_filename.replace(evidence['temp_id'], ko_id)
                 
                 # ファイルを移動してリネーム
@@ -1002,30 +1125,41 @@ class Phase1MultiRunner:
         print(f"完了: 確定完了: {success_count}/{len(pending_evidence)}件")
         print("="*70)
     
-    def analyze_and_sort_pending_evidence(self):
-        """未確定証拠をAI分析→日付抽出→自動ソート→確定"""
+    def analyze_and_sort_pending_evidence(self, evidence_type: str = 'ko'):
+        """未確定証拠をAI分析→日付抽出→自動ソート→確定
+        
+        Args:
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
+        type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+        type_folder = "甲号証" if evidence_type == 'ko' else "乙号証"
+        
         print("\n" + "="*70)
-        print("  未確定証拠の分析・日付抽出・自動ソート")
+        print(f"  未確定証拠の分析・日付抽出・自動ソート [{type_name}]")
         print("="*70)
         
-        # database.jsonから未確定証拠を取得
+        # database.jsonから未確定証拠を取得（証拠種別でフィルター）
         database = self.load_database()
-        pending_evidence = [e for e in database.get('evidence', []) if e.get('status') == 'pending']
+        pending_evidence = [
+            e for e in database.get('evidence', []) 
+            if e.get('status') == 'pending' and e.get('evidence_type', 'ko') == evidence_type
+        ]
         
         if not pending_evidence:
-            print("\n未確定の証拠はありません")
+            print(f"\n{type_name}の未確定証拠はありません")
             return
         
-        print(f"\n未確定証拠: {len(pending_evidence)}件")
+        print(f"\n{type_name}の未確定証拠: {len(pending_evidence)}件")
         print("\n現在の順序:")
         for idx, evidence in enumerate(pending_evidence, 1):
             print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
         
+        prefix = "ko" if evidence_type == 'ko' else "otsu"
         print("\n【処理内容】")
         print("  1. 各証拠から作成年月日を取得（既に分析済みならdocument_dateを使用）")
         print("  2. 作成年月日順に自動ソート（古い順）")
-        print("  3. ソート後の順序で確定番号（ko001, ko002...）を割り当て")
-        print("  4. 整理済み_未確定 → 甲号証 フォルダへ移動")
+        print(f"  3. ソート後の順序で確定番号（{prefix}001, {prefix}002, {prefix}003...）を割り当て")
+        print(f"  4. 整理済み_未確定 → {type_folder} フォルダへ移動")
         
         confirm = input("\n処理を開始しますか？ (y/n): ").strip().lower()
         if confirm != 'y':
@@ -1166,7 +1300,7 @@ class Phase1MultiRunner:
                 
                 # 新しいファイル名を生成
                 old_filename = evidence['renamed_filename']
-                # tmp_001_ の部分を ko001_ に置換
+                # tmp_XXX_ の部分を koXXX_ に置換
                 new_filename = old_filename.replace(evidence['temp_id'], ko_id)
                 
                 # ファイルを移動してリネーム
@@ -1250,17 +1384,22 @@ class Phase1MultiRunner:
         
         print("\n" + "="*70)
     
-    def edit_evidence_with_ai(self):
-        """AI対話形式で証拠内容を編集"""
+    def edit_evidence_with_ai(self, evidence_type: str = 'ko'):
+        """AI対話形式で証拠内容を編集
+        
+        Args:
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
         if not self.current_case:
             raise ValueError("事件が選択されていません")
         
+        type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
         print("\n" + "="*70)
-        print("  AI対話形式で証拠内容を改善")
+        print(f"  AI対話形式で証拠内容を改善 [{type_name}]")
         print("="*70)
         
         # 証拠番号を入力
-        evidence_numbers = self.get_evidence_number_input()
+        evidence_numbers = self.get_evidence_number_input(evidence_type)
         if not evidence_numbers:
             print("\nキャンセルしました")
             return
@@ -1270,7 +1409,7 @@ class Phase1MultiRunner:
             print(f"\n処理中: {evidence_number}")
             
             # データベースから証拠データを取得
-            database = self.db_manager.read_database()
+            database = self.db_manager.load_database()
             evidence_data = None
             
             for evidence in database.get('evidence', []):
@@ -1313,8 +1452,398 @@ class Phase1MultiRunner:
                     break
             
             # 保存
-            self.db_manager.write_database(database)
+            self.db_manager.save_database(database)
             print(f"✅ {evidence_number} の変更を保存しました")
+    
+    def show_evidence_list(self, evidence_type: str = 'ko'):
+        """証拠分析一覧を表示
+        
+        Args:
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
+        type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+        
+        print("\n" + "="*70)
+        print(f"  証拠分析一覧 [{type_name}]")
+        print("="*70)
+        
+        # データベースを読み込み
+        database = self.db_manager.load_database()
+        evidence_list = database.get('evidence', [])
+        
+        if not evidence_list:
+            print("\n⚠️  証拠が登録されていません")
+            return
+        
+        # 証拠種別でフィルター
+        filtered_evidence = [
+            e for e in evidence_list 
+            if e.get('evidence_type', 'ko') == evidence_type
+        ]
+        
+        if not filtered_evidence:
+            print(f"\n⚠️  {type_name}の証拠が登録されていません")
+            return
+        
+        # ステータス別に分類
+        confirmed_evidence = []      # 確定済み（甲号証/乙号証）
+        pending_evidence = []        # 整理済み_未確定
+        unclassified_evidence = []   # 未分類
+        
+        for evidence in filtered_evidence:
+            status = evidence.get('status', '未分類')
+            if status == '確定済み':
+                confirmed_evidence.append(evidence)
+            elif status == '整理済み_未確定':
+                pending_evidence.append(evidence)
+            else:
+                unclassified_evidence.append(evidence)
+        
+        # 確定済み証拠の表示
+        if confirmed_evidence:
+            print(f"\n【確定済み（{type_name}）】")
+            print("-"*70)
+            for evidence in sorted(confirmed_evidence, key=lambda x: x.get('evidence_id', '')):
+                evidence_id = evidence.get('evidence_id', '不明')
+                temp_id = evidence.get('temp_id', '')
+                file_name = evidence.get('file_name', '不明')
+                creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
+                
+                # 分析状態の確認
+                full_content = evidence.get('full_content', {})
+                analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
+                
+                print(f"  {evidence_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
+                if temp_id:
+                    print(f"             (元ID: {temp_id})")
+        
+        # 整理済み_未確定証拠の表示
+        if pending_evidence:
+            print("\n【整理済み_未確定】")
+            print("-"*70)
+            for evidence in sorted(pending_evidence, key=lambda x: x.get('temp_id', '')):
+                temp_id = evidence.get('temp_id', '不明')
+                file_name = evidence.get('file_name', '不明')
+                creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
+                
+                # 分析状態の確認
+                full_content = evidence.get('full_content', {})
+                analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
+                
+                print(f"  {temp_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
+        
+        # 未分類証拠の表示
+        if unclassified_evidence:
+            print("\n【未分類】")
+            print("-"*70)
+            for evidence in unclassified_evidence:
+                file_name = evidence.get('file_name', '不明')
+                temp_id = evidence.get('temp_id', '')
+                evidence_id = evidence.get('evidence_id', '')
+                display_id = evidence_id or temp_id or '不明'
+                
+                print(f"  {display_id:10} | {file_name}")
+        
+        # サマリー表示
+        print("\n" + "="*70)
+        print(f"  {type_name}の合計: {len(filtered_evidence)}件")
+        print(f"    確定済み: {len(confirmed_evidence)}件")
+        print(f"    整理済み_未確定: {len(pending_evidence)}件")
+        print(f"    未分類: {len(unclassified_evidence)}件")
+        print("="*70)
+    
+    def export_evidence_list(self, evidence_type: str = 'ko'):
+        """証拠一覧をCSV/Excel形式でエクスポート
+        
+        Args:
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
+        type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+        
+        print("\n" + "="*70)
+        print(f"  証拠一覧エクスポート [{type_name}]")
+        print("="*70)
+        
+        # データベースを読み込み
+        database = self.db_manager.load_database()
+        evidence_list = database.get('evidence', [])
+        
+        if not evidence_list:
+            print("\n⚠️  証拠が登録されていません")
+            return
+        
+        # 証拠種別でフィルター
+        filtered_evidence = [
+            e for e in evidence_list 
+            if e.get('evidence_type', 'ko') == evidence_type
+        ]
+        
+        if not filtered_evidence:
+            print(f"\n⚠️  {type_name}の証拠が登録されていません")
+            return
+        
+        # 出力形式を選択
+        print("\n出力形式を選択してください:")
+        print("  1. CSV形式")
+        print("  2. Excel形式 (.xlsx)")
+        print("  3. キャンセル")
+        
+        format_choice = input("\n> ").strip()
+        
+        if format_choice == '3' or not format_choice:
+            print("キャンセルしました")
+            return
+        
+        # 出力ファイル名を生成
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        case_name = self.current_case.get('case_name', 'unknown').replace(' ', '_').replace('/', '_')
+        type_suffix = "ko" if evidence_type == 'ko' else "otsu"
+        
+        if format_choice == '1':
+            # CSV形式
+            filename = f"evidence_list_{case_name}_{type_suffix}_{timestamp}.csv"
+            self._export_to_csv(filtered_evidence, filename, evidence_type)
+        elif format_choice == '2':
+            # Excel形式
+            filename = f"evidence_list_{case_name}_{type_suffix}_{timestamp}.xlsx"
+            self._export_to_excel(filtered_evidence, filename, evidence_type)
+        else:
+            print("無効な選択です")
+            return
+    
+    def _export_to_csv(self, evidence_list: List[Dict], filename: str, evidence_type: str = 'ko'):
+        """CSV形式でエクスポート
+        
+        Args:
+            evidence_list: 証拠リスト
+            filename: 出力ファイル名
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
+        import csv
+        
+        try:
+            output_path = os.path.join(os.getcwd(), filename)
+            
+            with open(output_path, 'w', encoding='utf-8-sig', newline='') as csvfile:
+                fieldnames = [
+                    '証拠種別', 'ステータス', '証拠番号', '仮番号', '作成日', 
+                    '分析状態', 'ファイル名', '文書種別', '作成者',
+                    '宛先', '要約', 'Google DriveファイルID'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                
+                # ステータスでソート（確定済み→整理済み_未確定→未分類）
+                status_order = {'確定済み': 1, '整理済み_未確定': 2, '未分類': 3}
+                sorted_evidence = sorted(
+                    evidence_list, 
+                    key=lambda x: (
+                        status_order.get(x.get('status', '未分類'), 99),
+                        x.get('evidence_id', ''),
+                        x.get('temp_id', '')
+                    )
+                )
+                
+                type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+                
+                for evidence in sorted_evidence:
+                    status = evidence.get('status', '未分類')
+                    evidence_id = evidence.get('evidence_id', '')
+                    temp_id = evidence.get('temp_id', '')
+                    
+                    # メタデータと分析内容を取得
+                    metadata = evidence.get('complete_metadata', {})
+                    full_content = evidence.get('full_content', {})
+                    
+                    creation_date = metadata.get('creation_date', '')
+                    file_name = evidence.get('file_name', evidence.get('original_filename', ''))
+                    document_type = full_content.get('document_type', '')
+                    author = full_content.get('author', '')
+                    recipient = full_content.get('recipient', '')
+                    summary = full_content.get('complete_description', '')
+                    gdrive_file_id = evidence.get('gdrive_file_id', '')
+                    
+                    # 分析状態
+                    analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
+                    
+                    writer.writerow({
+                        '証拠種別': type_name,
+                        'ステータス': status,
+                        '証拠番号': evidence_id,
+                        '仮番号': temp_id,
+                        '作成日': creation_date,
+                        '分析状態': analysis_status,
+                        'ファイル名': file_name,
+                        '文書種別': document_type,
+                        '作成者': author,
+                        '宛先': recipient,
+                        '要約': summary[:100] + '...' if len(summary) > 100 else summary,
+                        'Google DriveファイルID': gdrive_file_id
+                    })
+            
+            print(f"\n✅ CSV形式でエクスポートしました")
+            print(f"   ファイル: {output_path}")
+            print(f"   件数: {len(evidence_list)}件")
+            
+        except Exception as e:
+            print(f"\n❌ エクスポートに失敗しました: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _export_to_excel(self, evidence_list: List[Dict], filename: str, evidence_type: str = 'ko'):
+        """Excel形式でエクスポート
+        
+        Args:
+            evidence_list: 証拠リスト
+            filename: 出力ファイル名
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        except ImportError:
+            print("\n⚠️  openpyxlがインストールされていません")
+            print("以下のコマンドでインストールしてください:")
+            print("  pip3 install openpyxl")
+            print("\nまたは:")
+            print("  pip3 install --break-system-packages openpyxl")
+            return
+        
+        try:
+            type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+            output_path = os.path.join(os.getcwd(), filename)
+            
+            # ワークブックとシートを作成
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = f"{type_name}一覧"
+            
+            # ヘッダー行のスタイル
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            header_font = Font(color="FFFFFF", bold=True, size=11)
+            header_alignment = Alignment(horizontal="center", vertical="center")
+            border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            # ヘッダー行
+            headers = [
+                '証拠種別', 'ステータス', '証拠番号', '仮番号', '作成日', 
+                '分析状態', 'ファイル名', '文書種別', '作成者',
+                '宛先', '要約'
+            ]
+            
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_idx, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_alignment
+                cell.border = border
+            
+            # 列幅を設定
+            column_widths = {
+                'A': 12,  # 証拠種別
+                'B': 15,  # ステータス
+                'C': 12,  # 証拠番号
+                'D': 12,  # 仮番号
+                'E': 12,  # 作成日
+                'F': 12,  # 分析状態
+                'G': 40,  # ファイル名
+                'H': 15,  # 文書種別
+                'I': 20,  # 作成者
+                'J': 20,  # 宛先
+                'K': 60   # 要約
+            }
+            
+            for col, width in column_widths.items():
+                ws.column_dimensions[col].width = width
+            
+            # ステータスでソート
+            status_order = {'確定済み': 1, '整理済み_未確定': 2, '未分類': 3}
+            sorted_evidence = sorted(
+                evidence_list, 
+                key=lambda x: (
+                    status_order.get(x.get('status', '未分類'), 99),
+                    x.get('evidence_id', ''),
+                    x.get('temp_id', '')
+                )
+            )
+            
+            # データ行
+            for row_idx, evidence in enumerate(sorted_evidence, 2):
+                status = evidence.get('status', '未分類')
+                evidence_id = evidence.get('evidence_id', '')
+                temp_id = evidence.get('temp_id', '')
+                
+                # メタデータと分析内容を取得
+                metadata = evidence.get('complete_metadata', {})
+                full_content = evidence.get('full_content', {})
+                
+                creation_date = metadata.get('creation_date', '')
+                file_name = evidence.get('file_name', evidence.get('original_filename', ''))
+                document_type = full_content.get('document_type', '')
+                author = full_content.get('author', '')
+                recipient = full_content.get('recipient', '')
+                summary = full_content.get('complete_description', '')
+                
+                # 分析状態
+                analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
+                
+                # セルに値を設定
+                row_data = [
+                    type_name,      # 証拠種別
+                    status,
+                    evidence_id,
+                    temp_id,
+                    creation_date,
+                    analysis_status,
+                    file_name,
+                    document_type,
+                    author,
+                    recipient,
+                    summary
+                ]
+                
+                for col_idx, value in enumerate(row_data, 1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    cell.border = border
+                    cell.alignment = Alignment(vertical="top", wrap_text=True)
+                    
+                    # ステータスに応じて背景色を設定
+                    if col_idx == 2:  # ステータス列（証拠種別の次）
+                        if status == '確定済み':
+                            cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                        elif status == '整理済み_未確定':
+                            cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+                        else:
+                            cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                    
+                    # 分析状態に応じて背景色を設定
+                    if col_idx == 6:  # 分析状態列（証拠種別が追加されたので6列目）
+                        if analysis_status == "分析済み":
+                            cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                        else:
+                            cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+            
+            # フリーズペイン（ヘッダー行を固定）
+            ws.freeze_panes = "A2"
+            
+            # ファイルを保存
+            wb.save(output_path)
+            
+            print(f"\n✅ Excel形式でエクスポートしました")
+            print(f"   ファイル: {output_path}")
+            print(f"   件数: {len(evidence_list)}件")
+            
+        except Exception as e:
+            print(f"\n❌ エクスポートに失敗しました: {e}")
+            import traceback
+            traceback.print_exc()
     
     def run(self):
         """メイン実行ループ"""
@@ -1326,13 +1855,16 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択 (1-6, 9=終了): ").strip()
+            choice = input("\n選択 (1-7, 9=終了): ").strip()
             
             if choice == '1':
                 # 証拠整理（未分類フォルダから整理済み_未確定へ）
                 try:
-                    organizer = EvidenceOrganizer(self.case_manager, self.current_case)
-                    organizer.interactive_organize()
+                    # 証拠種別を選択
+                    evidence_type = self.select_evidence_type()
+                    if evidence_type:
+                        organizer = EvidenceOrganizer(self.case_manager, self.current_case)
+                        organizer.interactive_organize(evidence_type=evidence_type)
                 except Exception as e:
                     print(f"\n❌ エラーが発生しました: {str(e)}")
                     import traceback
@@ -1340,54 +1872,88 @@ class Phase1MultiRunner:
                         
             elif choice == '2':
                 # 証拠分析（番号指定・範囲指定に対応）
-                evidence_numbers = self.get_evidence_number_input()
-                if evidence_numbers:
-                    # 複数件の場合は確認
-                    if len(evidence_numbers) > 1:
-                        print(f"\n処理対象: {', '.join(evidence_numbers)}")
-                        confirm = input("処理を開始しますか？ (y/n): ").strip().lower()
-                        if confirm != 'y':
-                            continue
-                    
-                    # 分析実行
-                    for evidence_number in evidence_numbers:
-                        gdrive_file_info = self._get_gdrive_info_from_database(evidence_number)
-                        self.process_evidence(evidence_number, gdrive_file_info)
+                # 証拠種別を選択
+                evidence_type = self.select_evidence_type()
+                if evidence_type:
+                    evidence_numbers = self.get_evidence_number_input(evidence_type)
+                    if evidence_numbers:
+                        # 複数件の場合は確認
+                        if len(evidence_numbers) > 1:
+                            type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+                            print(f"\n処理対象 [{type_name}]: {', '.join(evidence_numbers)}")
+                            confirm = input("処理を開始しますか？ (y/n): ").strip().lower()
+                            if confirm != 'y':
+                                continue
+                        
+                        # 分析実行
+                        for evidence_number in evidence_numbers:
+                            gdrive_file_info = self._get_gdrive_info_from_database(evidence_number, evidence_type)
+                            self.process_evidence(evidence_number, gdrive_file_info, evidence_type)
                         
             elif choice == '3':
                 # AI対話形式で分析内容を改善
                 try:
-                    self.edit_evidence_with_ai()
+                    # 証拠種別を選択
+                    evidence_type = self.select_evidence_type()
+                    if evidence_type:
+                        self.edit_evidence_with_ai(evidence_type)
                 except Exception as e:
                     print(f"\nエラー: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     
             elif choice == '4':
-                # 日付順に並び替えて確定（整理済み_未確定 → 甲号証）
+                # 日付順に並び替えて確定（整理済み_未確定 → 甲号証/乙号証）
                 try:
-                    self.analyze_and_sort_pending_evidence()
+                    # 証拠種別を選択
+                    evidence_type = self.select_evidence_type()
+                    if evidence_type:
+                        self.analyze_and_sort_pending_evidence(evidence_type)
                 except Exception as e:
                     print(f"\nエラー: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     
             elif choice == '5':
+                # 証拠分析一覧を表示
+                try:
+                    # 証拠種別を選択
+                    evidence_type = self.select_evidence_type()
+                    if evidence_type:
+                        self.show_evidence_list(evidence_type)
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
+            elif choice == '6':
+                # 証拠一覧をエクスポート
+                try:
+                    # 証拠種別を選択
+                    evidence_type = self.select_evidence_type()
+                    if evidence_type:
+                        self.export_evidence_list(evidence_type)
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    
+            elif choice == '7':
                 # database.jsonの状態確認
                 self.show_database_status()
                 
-            elif choice == '6':
+            elif choice == '8':
                 # 事件を切り替え
                 if self.select_case():
                     print("\n✅ 事件を切り替えました")
                     
             elif choice == '9':
                 # 終了
-                print("\nPhase 1完全版システムを終了します")
+                print("\nPhase1_Evidence Analysis Systemを終了します")
                 break
                 
             else:
-                print("\nエラー: 無効な選択です。1-6または9を入力してください。")
+                print("\nエラー: 無効な選択です。1-9を入力してください。")
             
             input("\nEnterキーを押して続行...")
 
@@ -1395,7 +1961,7 @@ class Phase1MultiRunner:
 def main():
     """メイン関数"""
     print("\n" + "="*70)
-    print("  Phase 1完全版システム（マルチ事件対応版）起動中...")
+    print("  Phase1_Evidence Analysis System（マルチ事件対応版）起動中...")
     print("="*70)
     
     # 環境チェック

@@ -45,7 +45,7 @@ SHARED_DRIVE_ROOT_ID = "0AO6q4_G7DmYSUk9PVA"
 # 例: "meiyokison_名誉毀損等損害賠償請求事件"
 CASE_FOLDER_NAME_FORMAT = "{case_id}_{case_name}"
 
-# 証拠フォルダの標準名
+# 証拠フォルダの標準名（後方互換性のため残す）
 EVIDENCE_FOLDER_NAME_KO = "甲号証"
 EVIDENCE_FOLDER_NAME_OTSU = "乙号証"
 UNCLASSIFIED_FOLDER_NAME = "未分類"
@@ -53,6 +53,69 @@ PENDING_FOLDER_NAME = "整理済み_未確定"  # 仮番号ファイル用
 DATABASE_FOLDER_NAME = "database"
 TEMP_FOLDER_NAME = "temp"
 LOGS_FOLDER_NAME = "logs"
+
+# ================================
+# 証拠種別設定
+# ================================
+
+# 証拠種別の定数
+EVIDENCE_TYPE_KO = "ko"      # 甲号証（こちら側の証拠）
+EVIDENCE_TYPE_OTSU = "otsu"  # 乙号証（相手側の証拠）
+
+# 証拠種別の表示名
+EVIDENCE_TYPE_DISPLAY_NAMES = {
+    EVIDENCE_TYPE_KO: "甲号証",
+    EVIDENCE_TYPE_OTSU: "乙号証"
+}
+
+# 証拠種別とフォルダ名のマッピング
+EVIDENCE_TYPE_FOLDER_MAP = {
+    EVIDENCE_TYPE_KO: EVIDENCE_FOLDER_NAME_KO,
+    EVIDENCE_TYPE_OTSU: EVIDENCE_FOLDER_NAME_OTSU
+}
+
+# 証拠番号の接頭辞
+EVIDENCE_PREFIX_MAP = {
+    EVIDENCE_TYPE_KO: "ko",      # ko001, ko002, ...
+    EVIDENCE_TYPE_OTSU: "otsu"   # otsu001, otsu002, ...
+}
+
+# ================================
+# 階層的フォルダ構成（新システム）
+# ================================
+
+# 階層的なフォルダ構成を有効化
+USE_HIERARCHICAL_FOLDERS = True
+
+# 階層的フォルダ構成の定義
+HIERARCHICAL_FOLDER_STRUCTURE = {
+    EVIDENCE_TYPE_KO: {
+        'root': '甲号証',
+        'confirmed': '確定済み',      # 甲号証/確定済み/ (ko001, ko002, ...)
+        'pending': '整理済み_未確定',  # 甲号証/整理済み_未確定/ (tmp_001, tmp_002, ...)
+        'unclassified': '未分類'       # 甲号証/未分類/ (未整理の証拠)
+    },
+    EVIDENCE_TYPE_OTSU: {
+        'root': '乙号証',
+        'confirmed': '確定済み',      # 乙号証/確定済み/ (otsu001, otsu002, ...)
+        'pending': '整理済み_未確定',  # 乙号証/整理済み_未確定/ (otsu_001, otsu_002, ...)
+        'unclassified': '未分類'       # 乙号証/未分類/ (未整理の証拠)
+    }
+}
+
+# 仮番号の接頭辞（証拠種別を明確に識別）
+TEMP_PREFIX_MAP = {
+    EVIDENCE_TYPE_KO: "tmp_ko_",     # tmp_ko_001, tmp_ko_002, ...
+    EVIDENCE_TYPE_OTSU: "tmp_otsu_"  # tmp_otsu_001, tmp_otsu_002, ...
+}
+
+# 旧フォルダ構成との互換性
+LEGACY_FOLDER_STRUCTURE = {
+    'unclassified': '未分類',           # 事件フォルダ直下
+    'pending': '整理済み_未確定',       # 事件フォルダ直下
+    'ko_confirmed': '甲号証',           # 事件フォルダ直下
+    'otsu_confirmed': '乙号証'          # 事件フォルダ直下
+}
 
 # ================================
 # 事件検出設定
@@ -77,6 +140,32 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = "gpt-4o"
 OPENAI_MAX_TOKENS = 16000
 OPENAI_TEMPERATURE = 0.1  # 一貫性重視
+
+# コンテンツポリシーチェック無効化フラグ
+# true: コンテンツポリシーチェックを無効化（誤検出が多い場合に有効化）
+# false: コンテンツポリシーチェックを有効化（デフォルト）
+DISABLE_CONTENT_POLICY_CHECK = os.getenv("DISABLE_CONTENT_POLICY_CHECK", "true").lower() == "true"
+
+# Anthropic Claude API設定（OpenAI Vision API拒否時のフォールバック用）
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+# Claude 4.x世代モデル - 最高品質の証拠分析用
+ANTHROPIC_MODEL = "claude-sonnet-4-20250514"  # Claude Sonnet 4.x (最高品質)
+# フォールバックモデル（多段階フォールバック）
+ANTHROPIC_MODEL_FALLBACK_1 = "claude-sonnet-3-7-20250219"  # Claude Sonnet 3.7 (高品質)
+ANTHROPIC_MODEL_FALLBACK_2 = "claude-haiku-4-20250514"  # Claude Haiku 4.x (高速・大容量)
+
+# Vision API設定
+ANTHROPIC_MAX_TOKENS = 8000  # Sonnet 4.xの出力上限に合わせる
+ANTHROPIC_TEMPERATURE = 0.1  # 一貫性重視
+
+# Vision APIフォールバック戦略（4段階）
+# 1. OpenAI GPT-4o Vision (プライマリ)
+# 2. Claude Sonnet 4.x Vision (最高品質セカンダリ) ← NEW!
+# 3. Claude Sonnet 3.7 Vision (高品質ターシャリ) ← NEW!
+# 4. Claude Haiku 4.x Vision (高速フォールバック) ← NEW!
+# 5. OCRテキストベース分析 (最終手段)
+ENABLE_CLAUDE_FALLBACK = os.getenv("ENABLE_CLAUDE_FALLBACK", "true").lower() == "true"
 
 # ================================
 # Google Drive URL形式

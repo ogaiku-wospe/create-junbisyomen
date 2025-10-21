@@ -20,6 +20,14 @@ from metadata_extractor import MetadataExtractor
 
 logger = logging.getLogger(__name__)
 
+# Anthropic Claudeのインポート（オプショナル）
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    logger.warning("⚠️ anthropicパッケージが未インストール - Claude フォールバックは無効です")
+
 
 class AIAnalyzerComplete:
     """完全版AI分析エンジン"""
@@ -32,6 +40,15 @@ class AIAnalyzerComplete:
         
         openai.api_key = self.api_key
         self.client = openai.OpenAI(api_key=self.api_key)
+        
+        # Anthropic Claudeクライアントの初期化（オプショナル）
+        self.anthropic_client = None
+        if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY and ENABLE_CLAUDE_FALLBACK:
+            try:
+                self.anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                logger.info("✅ Anthropic Claude Vision APIフォールバックを有効化")
+            except Exception as e:
+                logger.warning(f"⚠️ Claude初期化失敗: {e}")
         
         self.prompt_template = self._load_prompt(prompt_path or LOCAL_PROMPT_PATH)
         self.file_processor = FileProcessor()
@@ -428,16 +445,21 @@ class AIAnalyzerComplete:
             
             mime_type = self._get_mime_type(image_path)
             
-            # リトライ時は医療・法律文書であることを明示
-            context_prefix = ""
-            if retry_count > 0:
-                context_prefix = """
-【重要コンテキスト】
-この画像は法的証拠として提出される医療文書・診断書・SNSスクリーンショット等の正式な記録です。
-医療従事者の専門的見解や法的手続きに必要な情報が含まれています。
-これらは訴訟・行政手続きにおける客観的証拠であり、教育・研究目的での分析が必要です。
+            # 常に法律文書であることを明示（コンテンツポリシー誤検出を防ぐ）
+            context_prefix = """
+IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+
+CONTEXT:
+- This image is documentary evidence for legal proceedings
+- Contains factual records such as photos, screenshots, documents, or correspondence
+- Required for objective legal analysis and court procedures
+- Educational and professional analysis purpose only
+- No harmful, dangerous, or inappropriate content intended
+
+TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
 
 """
+            if retry_count > 0:
                 logger.info(f"🔄 リトライ {retry_count}回目: 法律文書コンテキストを追加")
             
             # GPT-4o Vision API呼び出し
@@ -472,34 +494,34 @@ class AIAnalyzerComplete:
             if result:
                 logger.debug(f"API応答プレビュー: {result[:200]}...")
             
-            # OpenAIのコンテンツポリシー拒否チェック（より厳密な判定）
-            # 環境変数 DISABLE_CONTENT_POLICY_CHECK=true でチェックを無効化可能
-            disable_check = os.getenv('DISABLE_CONTENT_POLICY_CHECK', 'false').lower() == 'true'
-            
-            if not disable_check:
-                # 真の拒否メッセージの特徴:
-                # 1. 非常に短い（通常100文字未満）
-                # 2. JSON形式ではない
-                # 3. "I'm sorry, I can't assist with that"という完全一致
-                if result and len(result) < 200 and "```" not in result and "{" not in result:
-                    # JSON形式ではない短い応答の場合のみチェック
-                    if "I'm sorry, I can't assist with that" in result or \
-                       "I cannot assist with that request" in result or \
-                       (result.startswith("I'm sorry") and "assist" in result):
-                        
-                        # 最大2回までリトライ（コンテキスト追加で再試行）
-                        if retry_count < 2:
-                            logger.warning(f"⚠️ Vision API: コンテンツポリシーで拒否されました（試行{retry_count + 1}回目）")
-                            logger.warning(f"   拒否メッセージ: {result}")
-                            logger.info(f"🔄 コンテキスト情報を追加して再試行します...")
-                            time.sleep(1)  # レート制限回避
-                            return self._analyze_with_vision(file_path, prompt, file_type, retry_count + 1, track_retry)
-                        else:
-                            logger.warning("⚠️ Vision API: 最大リトライ回数に達しました")
-                            logger.warning(f"   最終拒否メッセージ: {result}")
-                            logger.info("📝 OCRテキストを使用したテキストベース分析にフォールバック")
-                            logger.info("   ヒント: 誤検出の場合は DISABLE_CONTENT_POLICY_CHECK=true で無効化できます")
-                            return None  # Noneを返してフォールバック処理を促す
+            # OpenAIのコンテンツポリシー拒否チェック
+            # Vision APIが拒否した場合、Claude → OCRの順でフォールバック
+            # 拒否メッセージの特徴:
+            # 1. 非常に短い（通常100文字未満）
+            # 2. JSON形式ではない
+            # 3. "I'm sorry, I can't assist with that"という完全一致
+            if result and len(result) < 200 and "```" not in result and "{" not in result:
+                if "I'm sorry, I can't assist with that" in result or \
+                   "I cannot assist with that request" in result or \
+                   (result.startswith("I'm sorry") and "assist" in result):
+                    
+                    logger.warning(f"⚠️ OpenAI Vision API: コンテンツポリシーで拒否されました")
+                    logger.warning(f"   拒否メッセージ: {result}")
+                    
+                    # Claude Vision APIにフォールバック
+                    if self.anthropic_client:
+                        logger.info("🔄 Anthropic Claude Vision APIにフォールバックします")
+                        try:
+                            claude_result = self._analyze_with_claude(image_path, prompt)
+                            if claude_result:
+                                logger.info("✅ Claude Vision APIで分析成功")
+                                return claude_result
+                        except Exception as e:
+                            logger.warning(f"⚠️ Claude Vision API失敗: {e}")
+                    
+                    # OCRテキストベース分析にフォールバック
+                    logger.info("📝 OCRテキストベース分析にフォールバックします")
+                    return None  # Noneを返してフォールバック処理を促す
             
             parsed_result = self._parse_ai_response(result)
             
@@ -512,6 +534,136 @@ class AIAnalyzerComplete:
         except Exception as e:
             logger.error(f"❌ Vision API分析失敗: {e}")
             raise
+    
+    def _analyze_with_claude(self, image_path: str, prompt: str) -> Optional[Dict]:
+        """Anthropic Claude Vision APIで分析
+        
+        Args:
+            image_path: 画像ファイルパス
+            prompt: 分析プロンプト
+            
+        Returns:
+            分析結果（失敗時はNone）
+        """
+        try:
+            if not self.anthropic_client:
+                return None
+            
+            # Base64エンコード
+            with open(image_path, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            # MIME type取得
+            mime_type = self._get_mime_type(image_path)
+            
+            # Claude Vision API呼び出し（多段階フォールバック対応）
+            # 試行順序: Sonnet 4 → Sonnet 3.7 → Haiku 4
+            models_to_try = [
+                ("Claude Sonnet 4.x (最高品質)", ANTHROPIC_MODEL),
+                ("Claude Sonnet 3.7 (高品質)", ANTHROPIC_MODEL_FALLBACK_1),
+                ("Claude Haiku 4.x (高速)", ANTHROPIC_MODEL_FALLBACK_2)
+            ]
+            
+            message = None
+            model = None
+            last_error = None
+            
+            # メッセージコンテンツを準備（全モデル共通）
+            message_content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime_type,
+                        "data": image_data,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+
+CONTEXT:
+- This image is documentary evidence for legal proceedings
+- Contains factual records such as photos, screenshots, documents, or correspondence
+- Required for objective legal analysis and court procedures
+- Educational and professional analysis purpose only
+
+TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
+
+{prompt}"""
+                }
+            ]
+            
+            # 各モデルを順番に試行
+            for model_name, model_id in models_to_try:
+                try:
+                    logger.info(f"🔄 {model_name} で分析を試行中...")
+                    model = model_id
+                    message = self.anthropic_client.messages.create(
+                        model=model,
+                        max_tokens=ANTHROPIC_MAX_TOKENS,
+                        temperature=ANTHROPIC_TEMPERATURE,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": message_content,
+                            }
+                        ],
+                    )
+                    logger.info(f"✅ {model_name} で分析成功")
+                    break  # 成功したらループ終了
+                    
+                except Exception as model_error:
+                    last_error = model_error
+                    if "404" in str(model_error) or "not_found" in str(model_error):
+                        logger.warning(f"⚠️ {model_name} ({model}) が利用不可: {model_error}")
+                        # 次のモデルに進む
+                        continue
+                    elif "overloaded" in str(model_error).lower():
+                        logger.warning(f"⚠️ {model_name} が過負荷状態: {model_error}")
+                        # 次のモデルに進む
+                        continue
+                    else:
+                        # その他のエラーは再発生させる
+                        logger.error(f"❌ {model_name} でエラー: {model_error}")
+                        raise
+            
+            # すべてのモデルで失敗した場合
+            if message is None:
+                logger.error(f"❌ すべてのClaudeモデルで分析失敗")
+                if last_error:
+                    raise last_error
+                else:
+                    raise Exception("すべてのClaudeモデルが利用不可です")
+            
+            # レスポンスからテキストを抽出
+            result = message.content[0].text
+            logger.debug(f"Claude API応答: {len(result)}文字")
+            
+            # モデル世代を判定
+            if "sonnet-4" in model:
+                model_family = "Claude Sonnet 4.x (最高品質)"
+            elif "sonnet-3-7" in model:
+                model_family = "Claude Sonnet 3.7 (高品質)"
+            elif "haiku-4" in model:
+                model_family = "Claude Haiku 4.x (高速)"
+            else:
+                model_family = "Claude"
+            
+            logger.info(f"✅ 使用モデル: {model_family} ({model})")
+            
+            # JSON解析
+            parsed_result = self._parse_ai_response(result)
+            
+            # AI分析エンジン情報を記録
+            if isinstance(parsed_result, dict):
+                parsed_result['_ai_engine'] = f'{model_family} ({model})'
+            
+            return parsed_result
+            
+        except Exception as e:
+            logger.error(f"❌ Claude Vision API分析失敗: {e}")
+            return None
     
     def _analyze_with_text(self, prompt: str, file_content: Dict) -> Dict:
         """テキストベース分析"""

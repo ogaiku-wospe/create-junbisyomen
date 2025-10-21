@@ -1,4 +1,8 @@
-# Phase 1 完全版システム - 証拠の完全言語化分析
+# Phase1_Evidence Analysis System - 証拠の完全言語化分析
+
+> **🚀 初めての方**: [**クイックスタートガイド（5分で起動）**](QUICKSTART.md) をご覧ください！
+> 
+> **ダブルクリックで簡単起動**: `start.command` (macOS) / `start.bat` (Windows) / `start.sh` (Linux)
 
 **🎉 v3.7.2 修正完了: データベース重複問題を解決 + Vision API拒否への自動対応！**
 
@@ -12,7 +16,7 @@
 
 ## 🎯 概要
 
-Phase 1完全版システムは、証拠ファイル（画像、PDF、Word、動画、音声など）を自動的に分析し、原文参照不要な詳細記述（完全言語化レベル4）を生成します。
+Phase1_Evidence Analysis Systemは、証拠ファイル（画像、PDF、Word、動画、音声など）を自動的に分析し、原文参照不要な詳細記述（完全言語化レベル4）を生成します。
 
 ### 主な機能
 
@@ -44,10 +48,43 @@ Phase 1完全版システムは、証拠ファイル（画像、PDF、Word、動
 
 ### 必須APIキー
 
-- OpenAI API キー（GPT-4o Vision用）
-- Google Drive API 認証情報（推奨）
+- **OpenAI API キー**（GPT-4o Vision用）- プライマリVision API
+- **Anthropic Claude API キー**（推奨）- OpenAI Vision拒否時の高品質フォールバック
+- **Google Drive API 認証情報**（推奨）- 証拠ファイルの自動ダウンロード
 
 ## 🚀 クイックスタート
+
+### 📖 詳細な手順は [QUICKSTART.md](QUICKSTART.md) をご覧ください
+
+### 3ステップで起動：
+
+**1️⃣ リポジトリのクローン**
+```bash
+git clone https://github.com/ogaiku-wospe/create-junbisyomen.git
+cd create-junbisyomen
+```
+
+**2️⃣ 自動セットアップ**
+```bash
+# macOS/Linux
+bash setup.sh
+
+# Windows
+setup.bat をダブルクリック
+```
+
+**3️⃣ 起動！**
+```bash
+# ダブルクリックで起動（おすすめ！）
+start.command (macOS) / start.bat (Windows) / start.sh (Linux)
+
+# またはターミナルから
+python3 run_phase1_multi.py
+```
+
+---
+
+## 📦 詳細なインストール手順
 
 ### 1. リポジトリのクローン
 
@@ -81,6 +118,15 @@ nano .env
 **.env の内容:**
 ```
 OPENAI_API_KEY=sk-proj-your-actual-api-key-here
+
+# Anthropic Claude API（OpenAI Vision拒否時の自動フォールバック用）
+ANTHROPIC_API_KEY=sk-ant-your-actual-api-key-here
+
+# コンテンツポリシーチェック無効化（工作写真など無害な画像の誤検出を防ぐ）
+DISABLE_CONTENT_POLICY_CHECK=true
+
+# Claude Vision APIフォールバックを有効化
+ENABLE_CLAUDE_FALLBACK=true
 ```
 
 ### 5. Google Drive API 認証情報の配置
