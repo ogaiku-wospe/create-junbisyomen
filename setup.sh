@@ -60,8 +60,29 @@ echo "【ステップ 3/5】依存パッケージのインストール"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ -f "requirements.txt" ]; then
     echo "📦 Pythonパッケージをインストール中..."
-    pip3 install -r requirements.txt
-    echo "✅ インストール完了"
+    
+    # まず通常のインストールを試行
+    if pip3 install -r requirements.txt 2>/dev/null; then
+        echo "✅ インストール完了"
+    else
+        # エラーが発生した場合、externally-managed-environmentエラーかチェック
+        echo "⚠️  通常のインストールに失敗しました"
+        echo "🔧 --break-system-packages フラグでリトライします..."
+        echo ""
+        
+        if pip3 install --break-system-packages -r requirements.txt; then
+            echo "✅ インストール完了（--break-system-packages使用）"
+            echo ""
+            echo "💡 Python 3.13以降では、システムパッケージ保護のため"
+            echo "   --break-system-packages フラグが必要です"
+        else
+            echo "❌ インストールに失敗しました"
+            echo ""
+            echo "🔧 手動でインストールしてください："
+            echo "   pip3 install --break-system-packages -r requirements.txt"
+            echo ""
+        fi
+    fi
 else
     echo "⚠️  requirements.txtが見つかりません"
 fi

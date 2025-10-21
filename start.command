@@ -68,10 +68,14 @@ if ! python3 -c "import openai" 2>/dev/null; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "📦 依存パッケージをインストール中..."
-        pip3 install -r requirements.txt
+        if ! pip3 install -r requirements.txt 2>/dev/null; then
+            echo "🔧 --break-system-packages フラグでリトライ..."
+            pip3 install --break-system-packages -r requirements.txt
+        fi
     else
         echo "❌ インストールをキャンセルしました"
-        echo "手動でインストールしてください: pip3 install -r requirements.txt"
+        echo "手動でインストールしてください:"
+        echo "  pip3 install --break-system-packages -r requirements.txt"
         read -p "Enterキーを押して終了..."
         exit 1
     fi

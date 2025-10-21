@@ -205,12 +205,43 @@ bash setup.sh
 ```bash
 cd create-junbisyomen
 pip3 install -r requirements.txt
+
+# Python 3.13以降で "externally-managed-environment" エラーが出る場合:
+pip3 install --break-system-packages -r requirements.txt
 ```
 
 > 💡 **このエラーが出た場合は必ず `setup.sh` を実行してください！**
 > 
 > `start.sh` や `python3 run_phase1_multi.py` を実行する前に、
 > まず `bash setup.sh` で依存パッケージをインストールする必要があります。
+
+---
+
+### ❌ "externally-managed-environment" エラー（Python 3.13以降）
+
+**エラーメッセージ例**:
+```
+error: externally-managed-environment
+× This environment is externally managed
+```
+
+**原因**: Python 3.13以降では、システムPythonの保護のため `pip install` が制限されています
+
+**⚡ 解決方法（推奨）**:
+```bash
+cd create-junbisyomen
+pip3 install --break-system-packages -r requirements.txt
+```
+
+または `setup.sh` を実行すれば自動で対応します：
+```bash
+bash setup.sh
+```
+
+> 💡 `--break-system-packages` フラグは安全です
+> 
+> このプロジェクトは独立したパッケージを使用するため、
+> システムパッケージと競合することはありません。
 
 ---
 
