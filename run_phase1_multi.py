@@ -531,6 +531,8 @@ class Phase1MultiRunner:
         print("  3. AI対話形式で分析内容を改善")
         print("\n【証拠の確定・管理】")
         print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証)")
+        print("\n【証拠の閲覧】")
+        print("  7. 証拠分析一覧を表示")
         print("\n【システム管理】")
         print("  5. database.jsonの状態確認")
         print("  6. 事件を切り替え")
@@ -1353,6 +1355,87 @@ class Phase1MultiRunner:
             self.db_manager.save_database(database)
             print(f"✅ {evidence_number} の変更を保存しました")
     
+    def show_evidence_list(self):
+        """証拠分析一覧を表示"""
+        print("\n" + "="*70)
+        print("  証拠分析一覧")
+        print("="*70)
+        
+        # データベースを読み込み
+        database = self.db_manager.load_database()
+        evidence_list = database.get('evidence', [])
+        
+        if not evidence_list:
+            print("\n⚠️  証拠が登録されていません")
+            return
+        
+        # ステータス別に分類
+        confirmed_evidence = []      # 確定済み（甲号証）
+        pending_evidence = []        # 整理済み_未確定
+        unclassified_evidence = []   # 未分類
+        
+        for evidence in evidence_list:
+            status = evidence.get('status', '未分類')
+            if status == '確定済み':
+                confirmed_evidence.append(evidence)
+            elif status == '整理済み_未確定':
+                pending_evidence.append(evidence)
+            else:
+                unclassified_evidence.append(evidence)
+        
+        # 確定済み証拠の表示
+        if confirmed_evidence:
+            print("\n【確定済み（甲号証）】")
+            print("-"*70)
+            for evidence in sorted(confirmed_evidence, key=lambda x: x.get('evidence_id', '')):
+                evidence_id = evidence.get('evidence_id', '不明')
+                temp_id = evidence.get('temp_id', '')
+                file_name = evidence.get('file_name', '不明')
+                creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
+                
+                # 分析状態の確認
+                full_content = evidence.get('full_content', {})
+                analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
+                
+                print(f"  {evidence_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
+                if temp_id:
+                    print(f"             (元ID: {temp_id})")
+        
+        # 整理済み_未確定証拠の表示
+        if pending_evidence:
+            print("\n【整理済み_未確定】")
+            print("-"*70)
+            for evidence in sorted(pending_evidence, key=lambda x: x.get('temp_id', '')):
+                temp_id = evidence.get('temp_id', '不明')
+                file_name = evidence.get('file_name', '不明')
+                creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
+                
+                # 分析状態の確認
+                full_content = evidence.get('full_content', {})
+                analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
+                
+                print(f"  {temp_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
+        
+        # 未分類証拠の表示
+        if unclassified_evidence:
+            print("\n【未分類】")
+            print("-"*70)
+            for evidence in unclassified_evidence:
+                file_name = evidence.get('file_name', '不明')
+                temp_id = evidence.get('temp_id', '')
+                evidence_id = evidence.get('evidence_id', '')
+                display_id = evidence_id or temp_id or '不明'
+                
+                print(f"  {display_id:10} | {file_name}")
+        
+        # サマリー表示
+        print("\n" + "="*70)
+        print(f"  合計: {len(evidence_list)}件")
+        print(f"    確定済み: {len(confirmed_evidence)}件")
+        print(f"    整理済み_未確定: {len(pending_evidence)}件")
+        print(f"    未分類: {len(unclassified_evidence)}件")
+        print("="*70)
+    
     def run(self):
         """メイン実行ループ"""
         # 最初に事件を選択
@@ -1363,7 +1446,7 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択 (1-6, 9=終了): ").strip()
+            choice = input("\n選択 (1-7, 9=終了): ").strip()
             
             if choice == '1':
                 # 証拠整理（未分類フォルダから整理済み_未確定へ）
@@ -1417,6 +1500,15 @@ class Phase1MultiRunner:
                 # 事件を切り替え
                 if self.select_case():
                     print("\n✅ 事件を切り替えました")
+            
+            elif choice == '7':
+                # 証拠分析一覧を表示
+                try:
+                    self.show_evidence_list()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     
             elif choice == '9':
                 # 終了
@@ -1424,7 +1516,7 @@ class Phase1MultiRunner:
                 break
                 
             else:
-                print("\nエラー: 無効な選択です。1-6または9を入力してください。")
+                print("\nエラー: 無効な選択です。1-7または9を入力してください。")
             
             input("\nEnterキーを押して続行...")
 
