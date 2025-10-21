@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Phase 1完全版システム - マルチ事件対応版
+Phase1_Evidence Analysis System - マルチ事件対応版
 
 【概要】
 大元の共有ドライブIDのみを設定し、複数事件を並行管理できるシステムです。
@@ -78,7 +78,7 @@ class Phase1MultiRunner:
             選択成功: True, キャンセル: False
         """
         print("\n" + "="*70)
-        print("  Phase 1完全版システム - 事件選択")
+        print("  Phase1_Evidence Analysis System - 事件選択")
         print("="*70)
         
         # 事件を検出
@@ -522,12 +522,12 @@ class Phase1MultiRunner:
             return
         
         print("\n" + "="*70)
-        print(f"  Phase 1完全版システム - 証拠管理")
+        print(f"  Phase1_Evidence Analysis System - 証拠管理")
         print(f"  事件: {self.current_case['case_name']}")
         print("="*70)
         print("\n【証拠の整理・分析】")
         print("  1. 証拠整理 (未分類フォルダ → 整理済み_未確定)")
-        print("  2. 証拠分析 (番号指定: ko70, tmp_001 / 範囲指定: ko70-73)")
+        print("  2. 証拠分析 (番号指定: tmp_001 / 範囲指定: tmp_001-011)")
         print("  3. AI対話形式で分析内容を改善")
         print("\n【証拠の確定・管理】")
         print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証)")
@@ -1512,7 +1512,7 @@ class Phase1MultiRunner:
                     
             elif choice == '9':
                 # 終了
-                print("\nPhase 1完全版システムを終了します")
+                print("\nPhase1_Evidence Analysis Systemを終了します")
                 break
                 
             else:
@@ -1524,7 +1524,7 @@ class Phase1MultiRunner:
 def main():
     """メイン関数"""
     print("\n" + "="*70)
-    print("  Phase 1完全版システム（マルチ事件対応版）起動中...")
+    print("  Phase1_Evidence Analysis System（マルチ事件対応版）起動中...")
     print("="*70)
     
     # 環境チェック
