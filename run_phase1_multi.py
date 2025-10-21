@@ -203,65 +203,115 @@ class Phase1MultiRunner:
             case_folder_id = case_folder['id']
             print(f"  ✅ 事件フォルダ作成: {case_folder_name}")
             
-            # 甲号証フォルダを作成
-            ko_folder_metadata = {
-                'name': '甲号証',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            ko_folder = service.files().create(
-                body=ko_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 甲号証フォルダ作成")
-            
-            # 乙号証フォルダを作成
-            otsu_folder_metadata = {
-                'name': '乙号証',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            otsu_folder = service.files().create(
-                body=otsu_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 乙号証フォルダ作成")
-            
-            # 未分類フォルダを作成
-            unclassified_folder_metadata = {
-                'name': '未分類',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            unclassified_folder = service.files().create(
-                body=unclassified_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 未分類フォルダ作成")
-            
-            # 整理済み_未確定フォルダを作成
-            pending_folder_metadata = {
-                'name': '整理済み_未確定',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [case_folder_id]
-            }
-            
-            pending_folder = service.files().create(
-                body=pending_folder_metadata,
-                supportsAllDrives=True,
-                fields='id, name'
-            ).execute()
-            
-            print(f"  ✅ 整理済み_未確定フォルダ作成")
+            # 階層的フォルダ構造を作成
+            if gconfig.USE_HIERARCHICAL_FOLDERS:
+                print(f"  📁 階層的フォルダ構造を作成中...")
+                
+                # 甲号証ルートフォルダを作成
+                ko_folder_metadata = {
+                    'name': '甲号証',
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [case_folder_id]
+                }
+                
+                ko_folder = service.files().create(
+                    body=ko_folder_metadata,
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                ko_folder_id = ko_folder['id']
+                print(f"    ✅ 甲号証フォルダ作成")
+                
+                # 甲号証配下にサブフォルダを作成
+                ko_subfolders = {}
+                for status_key, folder_name in [('confirmed', '確定済み'), ('pending', '整理済み_未確定'), ('unclassified', '未分類')]:
+                    subfolder = service.files().create(
+                        body={
+                            'name': folder_name,
+                            'mimeType': 'application/vnd.google-apps.folder',
+                            'parents': [ko_folder_id]
+                        },
+                        supportsAllDrives=True,
+                        fields='id, name'
+                    ).execute()
+                    ko_subfolders[status_key] = subfolder['id']
+                    print(f"      ✅ 甲号証/{folder_name}")
+                
+                # 乙号証ルートフォルダを作成
+                otsu_folder_metadata = {
+                    'name': '乙号証',
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [case_folder_id]
+                }
+                
+                otsu_folder = service.files().create(
+                    body=otsu_folder_metadata,
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                otsu_folder_id = otsu_folder['id']
+                print(f"    ✅ 乙号証フォルダ作成")
+                
+                # 乙号証配下にサブフォルダを作成
+                otsu_subfolders = {}
+                for status_key, folder_name in [('confirmed', '確定済み'), ('pending', '整理済み_未確定'), ('unclassified', '未分類')]:
+                    subfolder = service.files().create(
+                        body={
+                            'name': folder_name,
+                            'mimeType': 'application/vnd.google-apps.folder',
+                            'parents': [otsu_folder_id]
+                        },
+                        supportsAllDrives=True,
+                        fields='id, name'
+                    ).execute()
+                    otsu_subfolders[status_key] = subfolder['id']
+                    print(f"      ✅ 乙号証/{folder_name}")
+            else:
+                # 旧形式のフラットな構造（後方互換性のため残す）
+                ko_folder = service.files().create(
+                    body={
+                        'name': '甲号証',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                otsu_folder = service.files().create(
+                    body={
+                        'name': '乙号証',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                # 未分類・整理済み_未確定フォルダ（事件フォルダ直下）
+                service.files().create(
+                    body={
+                        'name': '未分類',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                service.files().create(
+                    body={
+                        'name': '整理済み_未確定',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [case_folder_id]
+                    },
+                    supportsAllDrives=True,
+                    fields='id, name'
+                ).execute()
+                
+                print(f"  ✅ 旧形式フォルダ構造作成完了")
             
             # 事件情報を一時設定（database作成のため）
             temp_case_info = {
@@ -299,6 +349,14 @@ class Phase1MultiRunner:
                 'otsu_evidence_folder_id': otsu_folder['id'],
                 'case_folder_url': case_folder.get('webViewLink', '')
             }
+            
+            # 階層的構造の場合はサブフォルダ情報を追加
+            if gconfig.USE_HIERARCHICAL_FOLDERS:
+                self.current_case['folder_structure'] = 'hierarchical'
+                self.current_case['ko_folders'] = ko_subfolders
+                self.current_case['otsu_folders'] = otsu_subfolders
+            else:
+                self.current_case['folder_structure'] = 'legacy'
             
             # データベースマネージャーを初期化
             self.db_manager = create_database_manager(self.case_manager, self.current_case)

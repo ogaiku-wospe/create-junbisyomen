@@ -45,7 +45,7 @@ SHARED_DRIVE_ROOT_ID = "0AO6q4_G7DmYSUk9PVA"
 # 例: "meiyokison_名誉毀損等損害賠償請求事件"
 CASE_FOLDER_NAME_FORMAT = "{case_id}_{case_name}"
 
-# 証拠フォルダの標準名
+# 証拠フォルダの標準名（後方互換性のため残す）
 EVIDENCE_FOLDER_NAME_KO = "甲号証"
 EVIDENCE_FOLDER_NAME_OTSU = "乙号証"
 UNCLASSIFIED_FOLDER_NAME = "未分類"
@@ -78,6 +78,43 @@ EVIDENCE_TYPE_FOLDER_MAP = {
 EVIDENCE_PREFIX_MAP = {
     EVIDENCE_TYPE_KO: "ko",      # ko001, ko002, ...
     EVIDENCE_TYPE_OTSU: "otsu"   # otsu001, otsu002, ...
+}
+
+# ================================
+# 階層的フォルダ構成（新システム）
+# ================================
+
+# 階層的なフォルダ構成を有効化
+USE_HIERARCHICAL_FOLDERS = True
+
+# 階層的フォルダ構成の定義
+HIERARCHICAL_FOLDER_STRUCTURE = {
+    EVIDENCE_TYPE_KO: {
+        'root': '甲号証',
+        'confirmed': '確定済み',      # 甲号証/確定済み/ (ko001, ko002, ...)
+        'pending': '整理済み_未確定',  # 甲号証/整理済み_未確定/ (tmp_001, tmp_002, ...)
+        'unclassified': '未分類'       # 甲号証/未分類/ (未整理の証拠)
+    },
+    EVIDENCE_TYPE_OTSU: {
+        'root': '乙号証',
+        'confirmed': '確定済み',      # 乙号証/確定済み/ (otsu001, otsu002, ...)
+        'pending': '整理済み_未確定',  # 乙号証/整理済み_未確定/ (otsu_001, otsu_002, ...)
+        'unclassified': '未分類'       # 乙号証/未分類/ (未整理の証拠)
+    }
+}
+
+# 仮番号の接頭辞（証拠種別を明確に識別）
+TEMP_PREFIX_MAP = {
+    EVIDENCE_TYPE_KO: "tmp_ko_",     # tmp_ko_001, tmp_ko_002, ...
+    EVIDENCE_TYPE_OTSU: "tmp_otsu_"  # tmp_otsu_001, tmp_otsu_002, ...
+}
+
+# 旧フォルダ構成との互換性
+LEGACY_FOLDER_STRUCTURE = {
+    'unclassified': '未分類',           # 事件フォルダ直下
+    'pending': '整理済み_未確定',       # 事件フォルダ直下
+    'ko_confirmed': '甲号証',           # 事件フォルダ直下
+    'otsu_confirmed': '乙号証'          # 事件フォルダ直下
 }
 
 # ================================

@@ -21,6 +21,7 @@ import os
 import sys
 import json
 import pickle
+import logging
 from typing import List, Dict, Optional
 from datetime import datetime
 from google.oauth2.credentials import Credentials
@@ -28,6 +29,9 @@ from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+
+# ロギング設定
+logger = logging.getLogger(__name__)
 
 # グローバル設定を読み込み
 try:
@@ -215,22 +219,30 @@ class CaseManager:
                 'otsu_evidence_folder_id': None,
                 'database_folder_id': None,
                 'evidence_count': 0,
-                'completed_count': 0
+                'completed_count': 0,
+                # 階層的フォルダ構成用
+                'folder_structure': None,  # 'hierarchical' or 'legacy'
+                'ko_folders': {},  # {'confirmed': id, 'pending': id, 'unclassified': id}
+                'otsu_folders': {},  # {'confirmed': id, 'pending': id, 'unclassified': id}
+                'legacy_folders': {}  # {'unclassified': id, 'pending': id} for legacy structure
             }
             
-            # 証拠フォルダを検索
-            for item in items:
-                if item['mimeType'] == 'application/vnd.google-apps.folder':
-                    if item['name'] == gconfig.EVIDENCE_FOLDER_NAME_KO:
-                        case_info['ko_evidence_folder_id'] = item['id']
-                        # 証拠数をカウント
-                        case_info['evidence_count'] = self._count_files_in_folder(
-                            service, item['id']
-                        )
-                    elif item['name'] == gconfig.EVIDENCE_FOLDER_NAME_OTSU:
-                        case_info['otsu_evidence_folder_id'] = item['id']
-                    elif item['name'] == gconfig.DATABASE_FOLDER_NAME:
-                        case_info['database_folder_id'] = item['id']
+            # フォルダ構造を分析（階層的 or 旧形式）
+            folder_structure_info = self._analyze_folder_structure(service, folder_id, items)
+            case_info.update(folder_structure_info)
+            
+            # 証拠数をカウント（階層的構造の場合は確定済みフォルダのみ）
+            if case_info['folder_structure'] == 'hierarchical':
+                ko_confirmed_id = case_info['ko_folders'].get('confirmed')
+                if ko_confirmed_id:
+                    case_info['evidence_count'] = self._count_files_in_folder(
+                        service, ko_confirmed_id
+                    )
+            elif case_info['ko_evidence_folder_id']:
+                # 旧形式の場合は甲号証フォルダ直下
+                case_info['evidence_count'] = self._count_files_in_folder(
+                    service, case_info['ko_evidence_folder_id']
+                )
             
             # config.json を読み込み（存在する場合）
             config_file = next(
@@ -263,6 +275,120 @@ class CaseManager:
         except Exception as e:
             print(f"  ⚠️ フォルダ分析エラー ({folder_name}): {e}")
             return None
+    
+    def _analyze_folder_structure(self, service, case_folder_id: str, items: List[Dict]) -> Dict:
+        """事件フォルダの構造を分析（階層的 or 旧形式）
+        
+        Args:
+            service: Google Drive APIサービス
+            case_folder_id: 事件フォルダID
+            items: 事件フォルダ直下のアイテムリスト
+        
+        Returns:
+            フォルダ構造情報
+        """
+        result = {
+            'folder_structure': 'legacy',  # デフォルトは旧形式
+            'ko_evidence_folder_id': None,
+            'otsu_evidence_folder_id': None,
+            'database_folder_id': None,
+            'ko_folders': {},
+            'otsu_folders': {},
+            'legacy_folders': {}
+        }
+        
+        # 各フォルダを検索
+        ko_root_folder = None
+        otsu_root_folder = None
+        
+        for item in items:
+            if item['mimeType'] != 'application/vnd.google-apps.folder':
+                continue
+            
+            name = item['name']
+            item_id = item['id']
+            
+            if name == '甲号証':
+                ko_root_folder = item
+                result['ko_evidence_folder_id'] = item_id
+            elif name == '乙号証':
+                otsu_root_folder = item
+                result['otsu_evidence_folder_id'] = item_id
+            elif name == '未分類':
+                result['legacy_folders']['unclassified'] = item_id
+            elif name == '整理済み_未確定':
+                result['legacy_folders']['pending'] = item_id
+            elif name == gconfig.DATABASE_FOLDER_NAME:
+                result['database_folder_id'] = item_id
+        
+        # 階層的構造をチェック
+        # 甲号証フォルダ配下を調べる
+        if ko_root_folder:
+            ko_subfolders = self._get_subfolders(service, ko_root_folder['id'])
+            ko_has_subfolders = any(
+                sf['name'] in ['確定済み', '整理済み_未確定', '未分類']
+                for sf in ko_subfolders
+            )
+            
+            if ko_has_subfolders:
+                # 階層的構造を検出
+                result['folder_structure'] = 'hierarchical'
+                for sf in ko_subfolders:
+                    if sf['name'] == '確定済み':
+                        result['ko_folders']['confirmed'] = sf['id']
+                    elif sf['name'] == '整理済み_未確定':
+                        result['ko_folders']['pending'] = sf['id']
+                    elif sf['name'] == '未分類':
+                        result['ko_folders']['unclassified'] = sf['id']
+        
+        # 乙号証フォルダ配下を調べる
+        if otsu_root_folder:
+            otsu_subfolders = self._get_subfolders(service, otsu_root_folder['id'])
+            otsu_has_subfolders = any(
+                sf['name'] in ['確定済み', '整理済み_未確定', '未分類']
+                for sf in otsu_subfolders
+            )
+            
+            if otsu_has_subfolders:
+                # 階層的構造を検出
+                result['folder_structure'] = 'hierarchical'
+                for sf in otsu_subfolders:
+                    if sf['name'] == '確定済み':
+                        result['otsu_folders']['confirmed'] = sf['id']
+                    elif sf['name'] == '整理済み_未確定':
+                        result['otsu_folders']['pending'] = sf['id']
+                    elif sf['name'] == '未分類':
+                        result['otsu_folders']['unclassified'] = sf['id']
+        
+        return result
+    
+    def _get_subfolders(self, service, folder_id: str) -> List[Dict]:
+        """フォルダ配下のサブフォルダを取得
+        
+        Args:
+            service: Google Drive APIサービス
+            folder_id: 親フォルダID
+        
+        Returns:
+            サブフォルダのリスト
+        """
+        try:
+            query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            
+            results = service.files().list(
+                q=query,
+                corpora='drive',
+                driveId=self.shared_drive_root_id,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields='files(id, name)',
+                pageSize=100
+            ).execute()
+            
+            return results.get('files', [])
+        except Exception as e:
+            logger.warning(f"サブフォルダ取得エラー ({folder_id}): {e}")
+            return []
     
     def _extract_case_id(self, folder_name: str) -> str:
         """フォルダ名から事件IDを抽出"""
@@ -438,6 +564,39 @@ class CaseManager:
             except KeyboardInterrupt:
                 print("\n\n❌ キャンセルしました")
                 return None
+    
+    def get_folder_id(self, case_info: Dict, evidence_type: str, status: str) -> Optional[str]:
+        """証拠種別とステータスに応じた適切なフォルダIDを取得
+        
+        Args:
+            case_info: 事件情報
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+            status: ステータス ('confirmed', 'pending', 'unclassified')
+        
+        Returns:
+            フォルダID（見つからない場合はNone）
+        """
+        folder_structure = case_info.get('folder_structure', 'legacy')
+        
+        if folder_structure == 'hierarchical':
+            # 階層的構造の場合
+            if evidence_type == 'ko':
+                return case_info.get('ko_folders', {}).get(status)
+            elif evidence_type == 'otsu':
+                return case_info.get('otsu_folders', {}).get(status)
+        else:
+            # 旧形式の場合
+            if status == 'confirmed':
+                # 確定済み = 甲号証/乙号証フォルダ直下
+                if evidence_type == 'ko':
+                    return case_info.get('ko_evidence_folder_id')
+                elif evidence_type == 'otsu':
+                    return case_info.get('otsu_evidence_folder_id')
+            else:
+                # pending/unclassified = 事件フォルダ直下（証拠種別は混在）
+                return case_info.get('legacy_folders', {}).get(status)
+        
+        return None
     
     def generate_case_config(self, case_info: Dict, output_path: str = "case_config.json") -> bool:
         """事件専用の設定ファイルを生成
