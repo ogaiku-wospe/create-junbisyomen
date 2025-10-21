@@ -872,10 +872,16 @@ class EvidenceOrganizer:
             traceback.print_exc()
             return False
     
-    def interactive_organize(self):
-        """対話的な証拠整理"""
+    def interactive_organize(self, evidence_type: str = 'ko'):
+        """対話的な証拠整理
+        
+        Args:
+            evidence_type: 証拠種別 ('ko' または 'otsu')
+        """
+        type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
+        
         print("\n" + "="*70)
-        print("  証拠整理システム")
+        print(f"  証拠整理システム [{type_name}]")
         print("  📁 事件: " + self.current_case['case_name'])
         print("="*70)
         
