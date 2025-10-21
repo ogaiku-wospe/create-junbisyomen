@@ -1,5 +1,9 @@
 # Phase 1 完全版システム - 証拠の完全言語化分析
 
+> **🚀 初めての方**: [**クイックスタートガイド（5分で起動）**](QUICKSTART.md) をご覧ください！
+> 
+> **ダブルクリックで簡単起動**: `start.command` (macOS) / `start.bat` (Windows) / `start.sh` (Linux)
+
 **🎉 v3.7.2 修正完了: データベース重複問題を解決 + Vision API拒否への自動対応！**
 
 **🎉 v3.7.0 大幅改善: 証拠の作成年月日に特化 + メニュー構造を大幅簡素化！**
@@ -49,6 +53,38 @@ Phase 1完全版システムは、証拠ファイル（画像、PDF、Word、動
 - **Google Drive API 認証情報**（推奨）- 証拠ファイルの自動ダウンロード
 
 ## 🚀 クイックスタート
+
+### 📖 詳細な手順は [QUICKSTART.md](QUICKSTART.md) をご覧ください
+
+### 3ステップで起動：
+
+**1️⃣ リポジトリのクローン**
+```bash
+git clone https://github.com/ogaiku-wospe/create-junbisyomen.git
+cd create-junbisyomen
+```
+
+**2️⃣ 自動セットアップ**
+```bash
+# macOS/Linux
+bash setup.sh
+
+# Windows
+setup.bat をダブルクリック
+```
+
+**3️⃣ 起動！**
+```bash
+# ダブルクリックで起動（おすすめ！）
+start.command (macOS) / start.bat (Windows) / start.sh (Linux)
+
+# またはターミナルから
+python3 run_phase1_multi.py
+```
+
+---
+
+## 📦 詳細なインストール手順
 
 ### 1. リポジトリのクローン
 
