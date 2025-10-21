@@ -55,6 +55,32 @@ TEMP_FOLDER_NAME = "temp"
 LOGS_FOLDER_NAME = "logs"
 
 # ================================
+# 証拠種別設定
+# ================================
+
+# 証拠種別の定数
+EVIDENCE_TYPE_KO = "ko"      # 甲号証（こちら側の証拠）
+EVIDENCE_TYPE_OTSU = "otsu"  # 乙号証（相手側の証拠）
+
+# 証拠種別の表示名
+EVIDENCE_TYPE_DISPLAY_NAMES = {
+    EVIDENCE_TYPE_KO: "甲号証",
+    EVIDENCE_TYPE_OTSU: "乙号証"
+}
+
+# 証拠種別とフォルダ名のマッピング
+EVIDENCE_TYPE_FOLDER_MAP = {
+    EVIDENCE_TYPE_KO: EVIDENCE_FOLDER_NAME_KO,
+    EVIDENCE_TYPE_OTSU: EVIDENCE_FOLDER_NAME_OTSU
+}
+
+# 証拠番号の接頭辞
+EVIDENCE_PREFIX_MAP = {
+    EVIDENCE_TYPE_KO: "ko",      # ko001, ko002, ...
+    EVIDENCE_TYPE_OTSU: "otsu"   # otsu001, otsu002, ...
+}
+
+# ================================
 # 事件検出設定
 # ================================
 
