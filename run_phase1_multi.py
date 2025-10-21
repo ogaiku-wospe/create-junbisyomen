@@ -1350,7 +1350,7 @@ class Phase1MultiRunner:
                     break
             
             # 保存
-            self.db_manager.write_database(database)
+            self.db_manager.save_database(database)
             print(f"✅ {evidence_number} の変更を保存しました")
     
     def run(self):
