@@ -532,10 +532,11 @@ class Phase1MultiRunner:
         print("\n【証拠の確定・管理】")
         print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証)")
         print("\n【証拠の閲覧】")
-        print("  7. 証拠分析一覧を表示")
+        print("  5. 証拠分析一覧を表示")
+        print("  6. 証拠一覧をエクスポート（CSV/Excel）")
         print("\n【システム管理】")
-        print("  5. database.jsonの状態確認")
-        print("  6. 事件を切り替え")
+        print("  7. database.jsonの状態確認")
+        print("  8. 事件を切り替え")
         print("  9. 終了")
         print("-"*70)
     
@@ -1436,6 +1437,264 @@ class Phase1MultiRunner:
         print(f"    未分類: {len(unclassified_evidence)}件")
         print("="*70)
     
+    def export_evidence_list(self):
+        """証拠一覧をCSV/Excel形式でエクスポート"""
+        print("\n" + "="*70)
+        print("  証拠一覧エクスポート")
+        print("="*70)
+        
+        # データベースを読み込み
+        database = self.db_manager.load_database()
+        evidence_list = database.get('evidence', [])
+        
+        if not evidence_list:
+            print("\n⚠️  証拠が登録されていません")
+            return
+        
+        # 出力形式を選択
+        print("\n出力形式を選択してください:")
+        print("  1. CSV形式")
+        print("  2. Excel形式 (.xlsx)")
+        print("  3. キャンセル")
+        
+        format_choice = input("\n> ").strip()
+        
+        if format_choice == '3' or not format_choice:
+            print("キャンセルしました")
+            return
+        
+        # 出力ファイル名を生成
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        case_name = self.current_case.get('case_name', 'unknown').replace(' ', '_').replace('/', '_')
+        
+        if format_choice == '1':
+            # CSV形式
+            filename = f"evidence_list_{case_name}_{timestamp}.csv"
+            self._export_to_csv(evidence_list, filename)
+        elif format_choice == '2':
+            # Excel形式
+            filename = f"evidence_list_{case_name}_{timestamp}.xlsx"
+            self._export_to_excel(evidence_list, filename)
+        else:
+            print("無効な選択です")
+            return
+    
+    def _export_to_csv(self, evidence_list: List[Dict], filename: str):
+        """CSV形式でエクスポート"""
+        import csv
+        
+        try:
+            output_path = os.path.join(os.getcwd(), filename)
+            
+            with open(output_path, 'w', encoding='utf-8-sig', newline='') as csvfile:
+                fieldnames = [
+                    'ステータス', '証拠番号', '仮番号', '作成日', 
+                    '分析状態', 'ファイル名', '文書種別', '作成者',
+                    '宛先', '要約', 'Google DriveファイルID'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                
+                # ステータスでソート（確定済み→整理済み_未確定→未分類）
+                status_order = {'確定済み': 1, '整理済み_未確定': 2, '未分類': 3}
+                sorted_evidence = sorted(
+                    evidence_list, 
+                    key=lambda x: (
+                        status_order.get(x.get('status', '未分類'), 99),
+                        x.get('evidence_id', ''),
+                        x.get('temp_id', '')
+                    )
+                )
+                
+                for evidence in sorted_evidence:
+                    status = evidence.get('status', '未分類')
+                    evidence_id = evidence.get('evidence_id', '')
+                    temp_id = evidence.get('temp_id', '')
+                    
+                    # メタデータと分析内容を取得
+                    metadata = evidence.get('complete_metadata', {})
+                    full_content = evidence.get('full_content', {})
+                    
+                    creation_date = metadata.get('creation_date', '')
+                    file_name = evidence.get('file_name', evidence.get('original_filename', ''))
+                    document_type = full_content.get('document_type', '')
+                    author = full_content.get('author', '')
+                    recipient = full_content.get('recipient', '')
+                    summary = full_content.get('complete_description', '')
+                    gdrive_file_id = evidence.get('gdrive_file_id', '')
+                    
+                    # 分析状態
+                    analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
+                    
+                    writer.writerow({
+                        'ステータス': status,
+                        '証拠番号': evidence_id,
+                        '仮番号': temp_id,
+                        '作成日': creation_date,
+                        '分析状態': analysis_status,
+                        'ファイル名': file_name,
+                        '文書種別': document_type,
+                        '作成者': author,
+                        '宛先': recipient,
+                        '要約': summary[:100] + '...' if len(summary) > 100 else summary,
+                        'Google DriveファイルID': gdrive_file_id
+                    })
+            
+            print(f"\n✅ CSV形式でエクスポートしました")
+            print(f"   ファイル: {output_path}")
+            print(f"   件数: {len(evidence_list)}件")
+            
+        except Exception as e:
+            print(f"\n❌ エクスポートに失敗しました: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _export_to_excel(self, evidence_list: List[Dict], filename: str):
+        """Excel形式でエクスポート"""
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        except ImportError:
+            print("\n⚠️  openpyxlがインストールされていません")
+            print("以下のコマンドでインストールしてください:")
+            print("  pip3 install openpyxl")
+            print("\nまたは:")
+            print("  pip3 install --break-system-packages openpyxl")
+            return
+        
+        try:
+            output_path = os.path.join(os.getcwd(), filename)
+            
+            # ワークブックとシートを作成
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "証拠一覧"
+            
+            # ヘッダー行のスタイル
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            header_font = Font(color="FFFFFF", bold=True, size=11)
+            header_alignment = Alignment(horizontal="center", vertical="center")
+            border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            # ヘッダー行
+            headers = [
+                'ステータス', '証拠番号', '仮番号', '作成日', 
+                '分析状態', 'ファイル名', '文書種別', '作成者',
+                '宛先', '要約'
+            ]
+            
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_idx, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_alignment
+                cell.border = border
+            
+            # 列幅を設定
+            column_widths = {
+                'A': 15,  # ステータス
+                'B': 12,  # 証拠番号
+                'C': 12,  # 仮番号
+                'D': 12,  # 作成日
+                'E': 12,  # 分析状態
+                'F': 40,  # ファイル名
+                'G': 15,  # 文書種別
+                'H': 20,  # 作成者
+                'I': 20,  # 宛先
+                'J': 60   # 要約
+            }
+            
+            for col, width in column_widths.items():
+                ws.column_dimensions[col].width = width
+            
+            # ステータスでソート
+            status_order = {'確定済み': 1, '整理済み_未確定': 2, '未分類': 3}
+            sorted_evidence = sorted(
+                evidence_list, 
+                key=lambda x: (
+                    status_order.get(x.get('status', '未分類'), 99),
+                    x.get('evidence_id', ''),
+                    x.get('temp_id', '')
+                )
+            )
+            
+            # データ行
+            for row_idx, evidence in enumerate(sorted_evidence, 2):
+                status = evidence.get('status', '未分類')
+                evidence_id = evidence.get('evidence_id', '')
+                temp_id = evidence.get('temp_id', '')
+                
+                # メタデータと分析内容を取得
+                metadata = evidence.get('complete_metadata', {})
+                full_content = evidence.get('full_content', {})
+                
+                creation_date = metadata.get('creation_date', '')
+                file_name = evidence.get('file_name', evidence.get('original_filename', ''))
+                document_type = full_content.get('document_type', '')
+                author = full_content.get('author', '')
+                recipient = full_content.get('recipient', '')
+                summary = full_content.get('complete_description', '')
+                
+                # 分析状態
+                analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
+                
+                # セルに値を設定
+                row_data = [
+                    status,
+                    evidence_id,
+                    temp_id,
+                    creation_date,
+                    analysis_status,
+                    file_name,
+                    document_type,
+                    author,
+                    recipient,
+                    summary
+                ]
+                
+                for col_idx, value in enumerate(row_data, 1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    cell.border = border
+                    cell.alignment = Alignment(vertical="top", wrap_text=True)
+                    
+                    # ステータスに応じて背景色を設定
+                    if col_idx == 1:  # ステータス列
+                        if status == '確定済み':
+                            cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                        elif status == '整理済み_未確定':
+                            cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+                        else:
+                            cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                    
+                    # 分析状態に応じて背景色を設定
+                    if col_idx == 5:  # 分析状態列
+                        if analysis_status == "分析済み":
+                            cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                        else:
+                            cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+            
+            # フリーズペイン（ヘッダー行を固定）
+            ws.freeze_panes = "A2"
+            
+            # ファイルを保存
+            wb.save(output_path)
+            
+            print(f"\n✅ Excel形式でエクスポートしました")
+            print(f"   ファイル: {output_path}")
+            print(f"   件数: {len(evidence_list)}件")
+            
+        except Exception as e:
+            print(f"\n❌ エクスポートに失敗しました: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def run(self):
         """メイン実行ループ"""
         # 最初に事件を選択
@@ -1493,15 +1752,6 @@ class Phase1MultiRunner:
                     traceback.print_exc()
                     
             elif choice == '5':
-                # database.jsonの状態確認
-                self.show_database_status()
-                
-            elif choice == '6':
-                # 事件を切り替え
-                if self.select_case():
-                    print("\n✅ 事件を切り替えました")
-            
-            elif choice == '7':
                 # 証拠分析一覧を表示
                 try:
                     self.show_evidence_list()
@@ -1509,6 +1759,24 @@ class Phase1MultiRunner:
                     print(f"\nエラー: {str(e)}")
                     import traceback
                     traceback.print_exc()
+            
+            elif choice == '6':
+                # 証拠一覧をエクスポート
+                try:
+                    self.export_evidence_list()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    
+            elif choice == '7':
+                # database.jsonの状態確認
+                self.show_database_status()
+                
+            elif choice == '8':
+                # 事件を切り替え
+                if self.select_case():
+                    print("\n✅ 事件を切り替えました")
                     
             elif choice == '9':
                 # 終了
@@ -1516,7 +1784,7 @@ class Phase1MultiRunner:
                 break
                 
             else:
-                print("\nエラー: 無効な選択です。1-7または9を入力してください。")
+                print("\nエラー: 無効な選択です。1-9を入力してください。")
             
             input("\nEnterキーを押して続行...")
 
