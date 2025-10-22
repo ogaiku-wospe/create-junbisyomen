@@ -2356,12 +2356,20 @@ class Phase1MultiRunner:
             
             from googleapiclient.http import MediaFileUpload
             
-            # 事件フォルダIDを取得
+            # エクスポートフォルダIDを取得
             database = self.db_manager.load_database()
-            case_folder_id = database.get('metadata', {}).get('case_folder_id')
-            if not case_folder_id:
-                print("❌ 事件フォルダIDが見つかりません")
-                return None
+            export_folder_id = database.get('metadata', {}).get('export_folder_id')
+            
+            # エクスポートフォルダIDがない場合は事件フォルダIDにフォールバック
+            if not export_folder_id:
+                case_folder_id = database.get('metadata', {}).get('case_folder_id')
+                if not case_folder_id:
+                    print("❌ 事件フォルダIDが見つかりません")
+                    return None
+                print("⚠️  エクスポートフォルダIDが見つかりません。事件フォルダに保存します。")
+                target_folder_id = case_folder_id
+            else:
+                target_folder_id = export_folder_id
             
             # ファイルタイプを判定
             file_ext = os.path.splitext(filename)[1].lower()
@@ -2374,7 +2382,7 @@ class Phase1MultiRunner:
             
             file_metadata = {
                 'name': filename,
-                'parents': [case_folder_id],
+                'parents': [target_folder_id],
                 'mimeType': mime_type
             }
             
