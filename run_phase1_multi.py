@@ -2799,9 +2799,6 @@ class Phase1MultiRunner:
                 for col, width in column_widths.items():
                     ws.column_dimensions[col].width = width
             
-            for col, width in column_widths.items():
-                ws.column_dimensions[col].width = width
-            
             # ステータスでソート
             def get_organization_status(evidence):
                 """証拠の整理状態を判定"""
