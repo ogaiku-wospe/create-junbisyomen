@@ -1494,11 +1494,17 @@ class Phase1MultiRunner:
         unclassified_evidence = []   # 未分類
         
         for evidence in filtered_evidence:
-            status = evidence.get('status', '未分類')
-            if status == '確定済み':
+            evidence_id = evidence.get('evidence_id', '')
+            evidence_number = evidence.get('evidence_number', '')
+            
+            # 整理状態を判定
+            # 1. 確定済み: evidence_numberが "甲1" や "乙2" のような形式
+            if evidence_number and not evidence_number.startswith('甲tmp') and not evidence_number.startswith('乙tmp'):
                 confirmed_evidence.append(evidence)
-            elif status == '整理済み_未確定':
+            # 2. 整理済み_未確定: evidence_idが "tmp_" や "tmp_ko_" で始まる
+            elif evidence_id.startswith('tmp_'):
                 pending_evidence.append(evidence)
+            # 3. 未分類: その他
             else:
                 unclassified_evidence.append(evidence)
         
@@ -1639,11 +1645,23 @@ class Phase1MultiRunner:
                 writer.writeheader()
                 
                 # ステータスでソート（確定済み→整理済み_未確定→未分類）
+                def get_organization_status(evidence):
+                    """証拠の整理状態を判定"""
+                    evidence_id = evidence.get('evidence_id', '')
+                    evidence_number = evidence.get('evidence_number', '')
+                    
+                    if evidence_number and not evidence_number.startswith('甲tmp') and not evidence_number.startswith('乙tmp'):
+                        return '確定済み'
+                    elif evidence_id.startswith('tmp_'):
+                        return '整理済み_未確定'
+                    else:
+                        return '未分類'
+                
                 status_order = {'確定済み': 1, '整理済み_未確定': 2, '未分類': 3}
                 sorted_evidence = sorted(
                     evidence_list, 
                     key=lambda x: (
-                        status_order.get(x.get('status', '未分類'), 99),
+                        status_order.get(get_organization_status(x), 99),
                         x.get('evidence_id', ''),
                         x.get('temp_id', '')
                     )
@@ -1652,7 +1670,7 @@ class Phase1MultiRunner:
                 type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
                 
                 for evidence in sorted_evidence:
-                    status = evidence.get('status', '未分類')
+                    status = get_organization_status(evidence)
                     evidence_id = evidence.get('evidence_id', '')
                     temp_id = evidence.get('temp_id', '')
                     
@@ -1767,11 +1785,23 @@ class Phase1MultiRunner:
                 ws.column_dimensions[col].width = width
             
             # ステータスでソート
+            def get_organization_status(evidence):
+                """証拠の整理状態を判定"""
+                evidence_id = evidence.get('evidence_id', '')
+                evidence_number = evidence.get('evidence_number', '')
+                
+                if evidence_number and not evidence_number.startswith('甲tmp') and not evidence_number.startswith('乙tmp'):
+                    return '確定済み'
+                elif evidence_id.startswith('tmp_'):
+                    return '整理済み_未確定'
+                else:
+                    return '未分類'
+            
             status_order = {'確定済み': 1, '整理済み_未確定': 2, '未分類': 3}
             sorted_evidence = sorted(
                 evidence_list, 
                 key=lambda x: (
-                    status_order.get(x.get('status', '未分類'), 99),
+                    status_order.get(get_organization_status(x), 99),
                     x.get('evidence_id', ''),
                     x.get('temp_id', '')
                 )
@@ -1779,7 +1809,7 @@ class Phase1MultiRunner:
             
             # データ行
             for row_idx, evidence in enumerate(sorted_evidence, 2):
-                status = evidence.get('status', '未分類')
+                status = get_organization_status(evidence)
                 evidence_id = evidence.get('evidence_id', '')
                 temp_id = evidence.get('temp_id', '')
                 
