@@ -34,6 +34,7 @@ try:
     from file_processor import FileProcessor
     from ai_analyzer_complete import AIAnalyzerComplete
     from evidence_editor_ai import EvidenceEditorAI
+    from timeline_builder import TimelineBuilder
 except ImportError as e:
     print(f"エラー: モジュールのインポートに失敗しました: {e}")
     print("\n必要なファイル:")
@@ -589,13 +590,15 @@ class Phase1MultiRunner:
         print("  3. AI対話形式で分析内容を改善")
         print("\n【証拠の確定・管理】")
         print("  4. 日付順に並び替えて確定 (整理済み_未確定 → 甲号証/乙号証)")
-        print("\n【証拠の閲覧】")
+        print("\n【証拠の閲覧・ストーリー生成】")
         print("  5. 証拠分析一覧を表示")
         print("  6. 証拠一覧をエクスポート（CSV/Excel）")
+        print("  7. 時系列ストーリーの生成（証拠を時系列で整理）")
+        print("  8. 依頼者発言・メモの管理 🆕")
         print("\n【システム管理】")
-        print("  7. database.jsonの状態確認")
-        print("  8. 事件を切り替え")
-        print("  9. 終了")
+        print("  9. database.jsonの状態確認")
+        print("  10. 事件を切り替え")
+        print("  0. 終了")
         print("-"*70)
     
     def select_evidence_type(self) -> Optional[str]:
@@ -1845,6 +1848,378 @@ class Phase1MultiRunner:
             import traceback
             traceback.print_exc()
     
+    def generate_timeline_story(self):
+        """時系列ストーリーの生成（拡張版）
+        
+        証拠を時系列順に並べて、客観的な事実の流れを生成します。
+        法的判断は含まず、証拠から抽出された事実のみを時系列で整理します。
+        AI機能を使用すると、より読みやすい客観的なストーリーが生成されます。
+        """
+        print("\n" + "="*70)
+        print("  時系列ストーリーの生成（拡張版）")
+        print("="*70)
+        print("\n証拠を時系列順に整理して、客観的な事実の流れを生成します。")
+        print("法的判断は含まず、証拠から抽出された事実のみを記載します。")
+        
+        # AI機能の使用確認
+        print("\n【AI機能の選択】")
+        print("  1. AI生成の客観的ストーリー（推奨：読みやすい）")
+        print("  2. 基本的なストーリー（AI不使用）")
+        print("  0. キャンセル")
+        
+        ai_choice = input("\n選択 (0-2): ").strip()
+        
+        if ai_choice == '0':
+            print("\nキャンセルしました")
+            return
+        
+        use_ai = (ai_choice == '1')
+        
+        try:
+            # TimelineBuilderを初期化
+            print("\n証拠データベースを読み込み中...")
+            builder = TimelineBuilder(self.case_manager, self.current_case, use_ai=use_ai)
+            
+            # タイムラインを構築
+            print("証拠データベースを分析中...")
+            timeline_events = builder.build_timeline()
+            
+            if not timeline_events:
+                print("\n⚠️ タイムラインを構築できませんでした。")
+                print("証拠が登録されていないか、証拠に日付情報がありません。")
+                return
+            
+            # ナラティブ（物語）を生成
+            narrative_result = None
+            if use_ai:
+                print("\n🤖 Claude AIによる客観的ストーリーを生成中...")
+                print("（高品質な分析のため、数十秒かかる場合があります）")
+                narrative_result = builder.generate_objective_narrative(timeline_events)
+                narrative_text = narrative_result.get("narrative", "") if isinstance(narrative_result, dict) else narrative_result
+            else:
+                print("\n時系列ストーリーを生成中...")
+                narrative_text = builder.generate_narrative(timeline_events)
+            
+            # 画面に表示
+            print("\n" + "="*70)
+            print("【生成された時系列ストーリー】")
+            print("="*70)
+            print("\n" + narrative_text)
+            
+            # 事実と証拠の紐付けを表示（AI使用時のみ）
+            if use_ai and isinstance(narrative_result, dict):
+                fact_mapping = narrative_result.get("fact_evidence_mapping", [])
+                if fact_mapping:
+                    print("\n" + "="*70)
+                    print("【事実と証拠の紐付け】")
+                    print("="*70)
+                    for i, fact in enumerate(fact_mapping[:5], 1):  # 最初の5件のみ表示
+                        print(f"\n{i}. {fact.get('fact_description', '不明な事実')}")
+                        print(f"   日付: {fact.get('date', '不明')}")
+                        print(f"   裏付け証拠: {', '.join(fact.get('evidence_numbers', []))}")
+                        print(f"   確実性: {fact.get('confidence', 'unknown')}")
+                    
+                    if len(fact_mapping) > 5:
+                        print(f"\n   ... 他 {len(fact_mapping) - 5}件の事実（詳細はエクスポートファイルを参照）")
+            
+            # 自然言語による改善オプション（AI使用時のみ）
+            if use_ai and isinstance(narrative_result, dict):
+                print("\n" + "="*70)
+                print("【ストーリーの改善】")
+                print("自然言語で改善指示を入力できます（例：「もっと詳しく」「簡潔に」）")
+                print("改善しない場合は空Enterを押してください。")
+                print("="*70)
+                
+                user_instruction = input("\n改善指示: ").strip()
+                
+                if user_instruction:
+                    print("\n🔄 ストーリーを改善中...")
+                    improved_result = builder.refine_narrative_with_instruction(narrative_result, user_instruction)
+                    
+                    # 改善後のストーリーを表示
+                    improved_narrative = improved_result.get("narrative", "")
+                    print("\n" + "="*70)
+                    print("【改善後の時系列ストーリー】")
+                    print("="*70)
+                    print("\n" + improved_narrative)
+                    
+                    # 改善結果を使用するか確認
+                    use_improved = input("\n改善後のストーリーを使用しますか？ (y/n): ").strip().lower()
+                    if use_improved == 'y':
+                        narrative_result = improved_result
+                        narrative_text = improved_narrative
+                        print("✅ 改善後のストーリーを採用しました")
+                    else:
+                        print("元のストーリーを使用します")
+            
+            # エクスポート形式を選択
+            print("\n" + "="*70)
+            print("エクスポート形式を選択してください:")
+            print("  1. JSON形式（プログラムで処理可能）")
+            print("  2. Markdown形式（読みやすい）")
+            print("  3. テキスト形式（シンプル）")
+            print("  4. HTML形式（ブラウザで閲覧可能）")
+            print("  5. すべての形式")
+            print("  0. エクスポートしない")
+            
+            choice = input("\n選択 (0-5): ").strip()
+            
+            export_formats = []
+            if choice == '1':
+                export_formats = ['json']
+            elif choice == '2':
+                export_formats = ['markdown']
+            elif choice == '3':
+                export_formats = ['text']
+            elif choice == '4':
+                export_formats = ['html']
+            elif choice == '5':
+                export_formats = ['json', 'markdown', 'text', 'html']
+            elif choice == '0':
+                print("\nエクスポートをスキップしました")
+                return
+            else:
+                print("\n無効な選択です")
+                return
+            
+            # エクスポート
+            print("\nファイルをエクスポート中...")
+            for format_type in export_formats:
+                output_path = builder.export_timeline(
+                    timeline_events, 
+                    output_format=format_type,
+                    include_ai_narrative=use_ai
+                )
+                if output_path:
+                    print(f"  ✅ {format_type.upper()}: {output_path}")
+            
+            print("\n✅ 時系列ストーリーの生成が完了しました！")
+            
+            # 証拠間の関連性分析を表示
+            if use_ai:
+                print("\n📊 証拠間の関連性分析:")
+                relationships = builder.analyze_evidence_relationships(timeline_events)
+                
+                if relationships["temporal_clusters"]:
+                    print("\n【時間的に近接した証拠グループ】")
+                    for i, cluster in enumerate(relationships["temporal_clusters"], 1):
+                        print(f"  {i}. {cluster['period']}: {cluster['evidence_count']}件")
+                        print(f"     証拠: {', '.join(cluster['evidence_numbers'])}")
+                
+                if relationships["chronological_gaps"]:
+                    print("\n【時系列上のギャップ】")
+                    for gap in relationships["chronological_gaps"]:
+                        print(f"  - {gap['description']}")
+            
+        except Exception as e:
+            print(f"\n❌ エラーが発生しました: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def manage_client_statements(self):
+        """依頼者発言・メモの管理"""
+        from timeline_builder import TimelineBuilder
+        
+        print("\n" + "="*70)
+        print("  依頼者発言・メモの管理")
+        print("="*70)
+        print("\n依頼者からのヒアリング内容、発言、メモなどを記録します。")
+        print("これらは時系列ストーリー生成時に証拠と統合されます。")
+        
+        # TimelineBuilderを初期化
+        builder = TimelineBuilder(self.case_manager, self.current_case, use_ai=False)
+        
+        while True:
+            print("\n" + "-"*70)
+            print("【依頼者情報管理メニュー】")
+            print("\n【日付指定あり（特定の出来事）】")
+            print("  1. 依頼者発言を追加")
+            print("  2. 登録済み発言を表示")
+            print("  3. ファイルから一括インポート（テキスト形式）")
+            print("\n【包括的情報（日付なし、複数事実にわたる）】🆕")
+            print("  4. 包括的な発言・メモを追加")
+            print("  5. 登録済み包括的発言を表示")
+            print("\n  0. メインメニューに戻る")
+            print("-"*70)
+            
+            choice = input("\n選択 (0-5): ").strip()
+            
+            if choice == '1':
+                # 依頼者発言を追加
+                print("\n【依頼者発言の追加】")
+                print("発言または出来事に関する日付を入力してください（YYYY-MM-DD形式）")
+                print("例: 2023-05-15")
+                date = input("日付: ").strip()
+                
+                if not date:
+                    print("❌ 日付を入力してください")
+                    continue
+                
+                print("\n発言内容またはメモを入力してください（複数行可、終了は空行）")
+                statement_lines = []
+                while True:
+                    line = input()
+                    if not line:
+                        break
+                    statement_lines.append(line)
+                
+                statement = "\n".join(statement_lines)
+                
+                if not statement:
+                    print("❌ 発言内容を入力してください")
+                    continue
+                
+                print("\n状況説明や背景情報を入力してください（省略可、終了は空行）")
+                context_lines = []
+                while True:
+                    line = input()
+                    if not line:
+                        break
+                    context_lines.append(line)
+                
+                context = "\n".join(context_lines) if context_lines else None
+                
+                # 発言を追加
+                if builder.add_client_statement(date, statement, context):
+                    print("\n✅ 依頼者発言を追加しました")
+                else:
+                    print("\n❌ 発言の追加に失敗しました")
+            
+            elif choice == '2':
+                # 登録済み発言を表示
+                statements = builder._load_client_statements()
+                
+                if not statements:
+                    print("\n登録されている発言はありません")
+                    continue
+                
+                print(f"\n【登録済み発言一覧】（{len(statements)}件）")
+                print("-"*70)
+                
+                for i, stmt in enumerate(statements, 1):
+                    print(f"\n{i}. ID: {stmt.get('statement_id', '不明')}")
+                    print(f"   日付: {stmt.get('date', '不明')}")
+                    print(f"   発言: {stmt.get('statement', '')[:100]}...")
+                    if stmt.get('context'):
+                        print(f"   状況: {stmt.get('context', '')[:100]}...")
+                    print(f"   登録日時: {stmt.get('added_at', '不明')}")
+            
+            elif choice == '3':
+                # ファイルから一括インポート
+                print("\n【ファイルから一括インポート】")
+                print("テキストファイルのパスを入力してください")
+                print("フォーマット例:")
+                print("  [2023-05-15]")
+                print("  依頼者の発言内容")
+                print("  複数行可能")
+                print("  ")
+                print("  [2023-06-20]")
+                print("  別の発言...")
+                
+                file_path = input("\nファイルパス: ").strip()
+                
+                if not file_path or not os.path.exists(file_path):
+                    print("❌ ファイルが見つかりません")
+                    continue
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # 簡単なパース: [YYYY-MM-DD] で区切る
+                    import re
+                    entries = re.split(r'\[(\d{4}-\d{2}-\d{2})\]', content)
+                    
+                    added_count = 0
+                    for i in range(1, len(entries), 2):
+                        if i + 1 < len(entries):
+                            date = entries[i].strip()
+                            statement = entries[i + 1].strip()
+                            
+                            if date and statement:
+                                if builder.add_client_statement(date, statement, None):
+                                    added_count += 1
+                    
+                    print(f"\n✅ {added_count}件の発言を追加しました")
+                    
+                except Exception as e:
+                    print(f"\n❌ インポートに失敗しました: {e}")
+            
+            elif choice == '4':
+                # 包括的な発言・メモを追加
+                print("\n【包括的な発言・メモの追加】")
+                print("※ 日付指定なし、複数の事実にわたる全体的な情報を記録します")
+                print("※ AIが時系列ストーリー生成時に全体の文脈として活用します\n")
+                
+                print("タイトルまたは概要を入力してください")
+                print("例: 事件の全体的な経緯、当事者間の関係性、背景情報")
+                title = input("タイトル: ").strip()
+                
+                if not title:
+                    print("❌ タイトルを入力してください")
+                    continue
+                
+                print("\nカテゴリを選択してください")
+                print("  1. 事件の背景")
+                print("  2. 人物関係")
+                print("  3. 全体的な経緯")
+                print("  4. その他")
+                cat_choice = input("選択 (1-4): ").strip()
+                
+                category_map = {
+                    '1': '事件の背景',
+                    '2': '人物関係',
+                    '3': '全体的な経緯',
+                    '4': 'その他'
+                }
+                category = category_map.get(cat_choice, 'その他')
+                
+                print(f"\n{title} の詳細内容を入力してください（複数行可、終了は空行）")
+                content_lines = []
+                while True:
+                    line = input()
+                    if not line:
+                        break
+                    content_lines.append(line)
+                
+                content = "\n".join(content_lines)
+                
+                if not content:
+                    print("❌ 内容を入力してください")
+                    continue
+                
+                # 包括的発言を追加
+                if builder.add_general_context(title, content, category):
+                    print("\n✅ 包括的な発言・メモを追加しました")
+                    print("   時系列ストーリー生成時にAIが自動的に考慮します")
+                else:
+                    print("\n❌ 追加に失敗しました")
+            
+            elif choice == '5':
+                # 登録済み包括的発言を表示
+                contexts = builder._load_general_context()
+                
+                if not contexts:
+                    print("\n登録されている包括的発言はありません")
+                    continue
+                
+                print(f"\n【登録済み包括的発言一覧】（{len(contexts)}件）")
+                print("-"*70)
+                
+                for i, ctx in enumerate(contexts, 1):
+                    print(f"\n{i}. ID: {ctx.get('context_id', '不明')}")
+                    print(f"   タイトル: {ctx.get('title', '不明')}")
+                    print(f"   カテゴリ: {ctx.get('category', '不明')}")
+                    print(f"   内容: {ctx.get('content', '')[:150]}...")
+                    print(f"   登録日時: {ctx.get('added_at', '不明')}")
+            
+            elif choice == '0':
+                # メインメニューに戻る
+                break
+            
+            else:
+                print("\n❌ 無効な選択です")
+    
     def run(self):
         """メイン実行ループ"""
         # 最初に事件を選択
@@ -1855,7 +2230,7 @@ class Phase1MultiRunner:
         # メインループ
         while True:
             self.display_main_menu()
-            choice = input("\n選択 (1-7, 9=終了): ").strip()
+            choice = input("\n選択 (0-9): ").strip()
             
             if choice == '1':
                 # 証拠整理（未分類フォルダから整理済み_未確定へ）
@@ -1939,21 +2314,39 @@ class Phase1MultiRunner:
                     traceback.print_exc()
                     
             elif choice == '7':
+                # 時系列ストーリーの生成
+                try:
+                    self.generate_timeline_story()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                
+            elif choice == '8':
+                # 依頼者発言・メモの管理
+                try:
+                    self.manage_client_statements()
+                except Exception as e:
+                    print(f"\nエラー: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                
+            elif choice == '9':
                 # database.jsonの状態確認
                 self.show_database_status()
                 
-            elif choice == '8':
+            elif choice == '10':
                 # 事件を切り替え
                 if self.select_case():
                     print("\n✅ 事件を切り替えました")
                     
-            elif choice == '9':
+            elif choice == '0':
                 # 終了
                 print("\nPhase1_Evidence Analysis Systemを終了します")
                 break
                 
             else:
-                print("\nエラー: 無効な選択です。1-9を入力してください。")
+                print("\nエラー: 無効な選択です。0-10を入力してください。")
             
             input("\nEnterキーを押して続行...")
 
