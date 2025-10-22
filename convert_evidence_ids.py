@@ -183,10 +183,21 @@ def main():
     try:
         case_manager = CaseManager()
         
-        # 現在の事件を取得
-        current_case = case_manager.get_current_case()
-        if not current_case:
+        # current_case.jsonから現在の事件を読み込む
+        current_case_path = os.path.join(os.path.dirname(__file__), 'current_case.json')
+        
+        if not os.path.exists(current_case_path):
             print("\n❌ エラー: 事件が選択されていません。")
+            print("   run_phase1_multi.py で事件を選択してから実行してください。")
+            print(f"   (current_case.json が見つかりません: {current_case_path})")
+            return
+        
+        # current_case.jsonを読み込み
+        with open(current_case_path, 'r', encoding='utf-8') as f:
+            current_case = json.load(f)
+        
+        if not current_case:
+            print("\n❌ エラー: 事件情報が不正です。")
             print("   run_phase1_multi.py で事件を選択してから実行してください。")
             return
         
