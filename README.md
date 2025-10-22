@@ -37,7 +37,7 @@ Phase1_Evidence Analysis Systemは、証拠ファイル（画像、PDF、Word、
 
 #### 🆕 v3.8.0 新機能
 - ✨ **時系列ストーリー組み立て**: 証拠を時系列順に整理し、客観的なストーリーを自動生成
-- ✨ **Claude 3.5 Sonnet統合**: 高品質な日本語ナラティブ生成
+- ✨ **Claude Sonnet 4統合**: 高品質な日本語ナラティブ生成
 - ✨ **事実・証拠紐付け**: 各事実がどの証拠によって裏付けられているかを明確に記録
 - ✨ **自然言語改善機能**: 「もっと詳しく」などの指示でストーリーを対話的に改善
 - ✨ **多様な出力形式**: JSON、Markdown、HTML、テキスト形式でエクスポート
@@ -462,8 +462,8 @@ pip install pillow-heif
    - 時系列順に自動ソート
    - 証拠間の時間的ギャップを自動検出
 
-2. **Claude 3.5 Sonnet による AI生成ストーリー** 🆕
-   - OpenAI GPT-4o から Anthropic Claude 3.5 Sonnet に変更
+2. **Claude Sonnet 4 による AI生成ストーリー** 🆕
+   - OpenAI GPT-4o から Anthropic Claude Sonnet 4 に変更
    - より高品質な日本語ナラティブ生成
    - 完全に客観的・中立的な記述（法的判断を含まない）
    - 証拠間の時系列的な流れを自然に表現

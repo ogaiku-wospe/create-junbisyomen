@@ -854,7 +854,7 @@ class TimelineBuilder:
         try:
             # Claude API を呼び出し
             response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-20250514",
                 max_tokens=8000,
                 temperature=0.3,
                 system="あなたは法律文書の専門家です。提供された証拠の時系列情報から、完全に客観的で中立的なストーリーを生成してください。法的判断や主観的評価は一切含めず、証拠から得られる事実のみを時系列順に記述してください。また、各事実がどの証拠によって裏付けられているかを明確に示してください。",
@@ -1134,7 +1134,7 @@ class TimelineBuilder:
         
         try:
             response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-20250514",
                 max_tokens=8000,
                 temperature=0.3,
                 system="あなたは法律文書の専門家です。ユーザーの指示に従って時系列ストーリーを改善しますが、客観性と中立性を維持してください。",

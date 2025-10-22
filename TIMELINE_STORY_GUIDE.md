@@ -34,7 +34,7 @@
 
 4. **AI機能の選択**
    - **オプション1（推奨）**: AI生成の客観的ストーリー
-     - Claude 3.5 Sonnetを使用して、読みやすい日本語のストーリーを生成
+     - Claude Sonnet 4を使用して、読みやすい日本語のストーリーを生成
      - 証拠間の関連性や時系列の流れを自然に表現
      - 事実と証拠の紐付けを明確に記録
    - **オプション2**: 基本的なストーリー
@@ -82,9 +82,9 @@ Phase1で分析された証拠の詳細情報を時系列ストーリーに統�
 
 ### 2. 客観的ストーリー生成（Claude AI使用）
 
-**🆕 Claude 3.5 Sonnet による高品質な分析**
+**🆕 Claude Sonnet 4 による高品質な分析**
 
-- OpenAI GPT-4o から Anthropic Claude 3.5 Sonnet に変更
+- OpenAI GPT-4o から Anthropic Claude Sonnet 4 に変更
 - より詳細で正確な事実抽出
 - 高品質な日本語のナラティブ生成
 - 証拠との紐付けが明確
@@ -260,7 +260,7 @@ AI機能を使用すると、以下の分析も自動実行されます：
     "generated_at": "2025-10-22T10:30:00",
     "total_events": 25,
     "ai_generated": true,
-    "ai_model": "claude-3-5-sonnet-20241022"
+    "ai_model": "claude-sonnet-4-20250514"
   },
   "timeline": [
     {
@@ -528,7 +528,7 @@ B社から電話で支払い遅延について謝罪があった。
 
 ### Claude AI生成プロンプト **🆕**
 
-**使用モデル**: Claude 3.5 Sonnet (claude-3-5-sonnet-20241022)
+**使用モデル**: Claude Sonnet 4 (claude-sonnet-4-20250514)
 
 ```
 【要件】
