@@ -3,6 +3,8 @@
 > **🚀 初めての方**: [**クイックスタートガイド（5分で起動）**](QUICKSTART.md) をご覧ください！
 > 
 > **ダブルクリックで簡単起動**: `start.command` (macOS) / `start.bat` (Windows) / `start.sh` (Linux)
+>
+> **🧹 プロジェクトクリーンアップ**: [**不要ファイル削除ガイド**](CLEANUP_INSTRUCTIONS.md) - 一時ファイルや機密ファイルを安全に削除
 
 **🎉 v3.7.2 修正完了: データベース重複問題を解決 + Vision API拒否への自動対応！**
 
