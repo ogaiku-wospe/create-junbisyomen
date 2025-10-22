@@ -494,7 +494,15 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                 logger.info(f"🔄 リトライ {retry_count}回目: 法律文書コンテキストを追加")
             
             if len(image_paths) > 1:
-                context_prefix += f"\nNOTE: This document has {len(image_paths)} pages. Analyze ALL pages thoroughly.\n\n"
+                context_prefix += f"""
+CRITICAL INSTRUCTION FOR MULTI-PAGE DOCUMENT:
+- This document contains {len(image_paths)} pages in total
+- You MUST analyze and extract information from ALL {len(image_paths)} pages
+- When extracting OCR text, combine text from ALL pages sequentially
+- When describing the document, include information from ALL pages
+- Do NOT focus only on the first page - ensure complete coverage of all pages
+
+"""
             
             # メッセージコンテンツを構築（テキスト + 全画像）
             message_content = [
