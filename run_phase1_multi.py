@@ -2096,20 +2096,38 @@ class Phase1MultiRunner:
         # OCR結果（複数の可能なパスを試行）
         ocr_text = ''
         
-        # パス1: file_processing_result.content.ocr.text
+        # パス1: file_processing_result.content.total_text（全ページ統合テキスト）
         file_content = analysis.get('file_processing_result', {}).get('content', {})
-        if isinstance(file_content.get('ocr'), dict):
-            ocr_text = file_content.get('ocr', {}).get('text', '')
+        ocr_text = file_content.get('total_text', '')
         
-        # パス2: file_processing_result.content.text（旧形式）
+        # パス2: file_processing_result.content.pages（各ページのテキストを結合）
+        if not ocr_text or ocr_text.strip() == '' or '\u0001' in ocr_text[:20]:
+            pages = file_content.get('pages', [])
+            if pages:
+                page_texts = []
+                for page in pages:
+                    page_text = page.get('text', '')
+                    # 制御文字のみの場合はスキップ
+                    if page_text and not all(c in '\u0001\n ' for c in page_text[:50]):
+                        page_texts.append(f"--- ページ{page.get('page_number', 0)} ---\n{page_text}")
+                ocr_text = '\n\n'.join(page_texts) if page_texts else ''
+        
+        # パス3: ai_analysis.full_content.complete_description（Vision APIの説明文）
+        # OCRテキストが無効な場合、Vision APIの説明を代替として使用
+        if not ocr_text or ocr_text.strip() == '' or '\u0001' in ocr_text[:20]:
+            complete_desc = full_content.get('complete_description', '')
+            if complete_desc:
+                ocr_text = f"[Vision API分析結果]\n{complete_desc}"
+        
+        # パス4: file_processing_result.content.text（旧形式）
         if not ocr_text:
             ocr_text = file_content.get('text', '')
         
-        # パス3: file_processing_result.ocr_text（別の形式）
+        # パス5: file_processing_result.ocr_text（別の形式）
         if not ocr_text:
             ocr_text = analysis.get('file_processing_result', {}).get('ocr_text', '')
         
-        # パス4: complete_metadata.ocr（別の保存場所）
+        # パス6: complete_metadata.ocr（別の保存場所）
         if not ocr_text:
             metadata = evidence.get('complete_metadata', {})
             ocr_text = metadata.get('ocr_text', '')
