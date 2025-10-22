@@ -1458,6 +1458,96 @@ class Phase1MultiRunner:
             self.db_manager.save_database(database)
             print(f"✅ {evidence_number} の変更を保存しました")
     
+    def _get_evidence_display_data(self, evidence: Dict) -> Dict:
+        """証拠データから表示用情報を抽出（データ構造の違いを吸収）
+        
+        Args:
+            evidence: 証拠データ
+            
+        Returns:
+            表示用データ（file_name, creation_date, analysis_status）
+        """
+        # ファイル名の取得（複数の場所を試行）
+        file_name = (
+            evidence.get('file_name') or
+            evidence.get('original_filename') or
+            evidence.get('complete_metadata', {}).get('basic', {}).get('file_name') or
+            '不明'
+        )
+        
+        # 作成日の取得（複数の場所を試行）
+        creation_date = (
+            evidence.get('complete_metadata', {}).get('creation_date') or
+            evidence.get('complete_metadata', {}).get('basic', {}).get('created_time', '')[:10] or  # YYYY-MM-DD部分のみ
+            evidence.get('complete_metadata', {}).get('format_specific', {}).get('document_info', {}).get('CreationDate', '')[:10] or
+            '不明'
+        )
+        
+        # 分析結果の取得（データ構造の違いを吸収）
+        phase1_analysis = evidence.get('phase1_complete_analysis', {})
+        
+        # 新しい構造: phase1_complete_analysis.ai_analysis.full_content.complete_description
+        ai_analysis = phase1_analysis.get('ai_analysis', {})
+        if ai_analysis:
+            full_content = ai_analysis.get('full_content', {})
+            complete_description = full_content.get('complete_description')
+        else:
+            # 旧構造: phase1_complete_analysis.complete_description または full_content.complete_description
+            complete_description = (
+                phase1_analysis.get('complete_description') or
+                phase1_analysis.get('full_content', {}).get('complete_description') or
+                evidence.get('full_content', {}).get('complete_description')
+            )
+        
+        analysis_status = "✅ 分析済み" if complete_description else "⚠️  未分析"
+        
+        return {
+            'file_name': file_name,
+            'creation_date': creation_date,
+            'analysis_status': analysis_status,
+            'complete_description': complete_description
+        }
+    
+    def _get_evidence_export_data(self, evidence: Dict) -> Dict:
+        """証拠データからエクスポート用詳細情報を抽出（データ構造の違いを吸収）
+        
+        Args:
+            evidence: 証拠データ
+            
+        Returns:
+            エクスポート用データ（基本情報+分析詳細）
+        """
+        # 基本情報を取得
+        display_data = self._get_evidence_display_data(evidence)
+        
+        # 分析詳細の取得（データ構造の違いを吸収）
+        phase1_analysis = evidence.get('phase1_complete_analysis', {})
+        ai_analysis = phase1_analysis.get('ai_analysis', {})
+        
+        if ai_analysis:
+            # 新しい構造: phase1_complete_analysis.ai_analysis.objective_analysis
+            objective_analysis = ai_analysis.get('objective_analysis', {})
+            document_type = objective_analysis.get('document_type', '')
+            
+            # author, recipientの取得
+            parties = objective_analysis.get('parties_mentioned', {})
+            organizations = parties.get('organizations', [])
+            author = organizations[0] if organizations else ''
+            recipient = organizations[1] if len(organizations) > 1 else ''
+        else:
+            # 旧構造: phase1_complete_analysis直下またはfull_content内
+            old_analysis = phase1_analysis or evidence.get('full_content', {})
+            document_type = old_analysis.get('document_type', '')
+            author = old_analysis.get('author', '')
+            recipient = old_analysis.get('recipient', '')
+        
+        return {
+            **display_data,
+            'document_type': document_type,
+            'author': author,
+            'recipient': recipient
+        }
+    
     def show_evidence_list(self, evidence_type: str = 'ko'):
         """証拠分析一覧を表示
         
@@ -1516,14 +1606,11 @@ class Phase1MultiRunner:
             for evidence in sorted(confirmed_evidence, key=lambda x: x.get('evidence_id', '')):
                 evidence_id = evidence.get('evidence_id', '不明')
                 temp_id = evidence.get('temp_id', '')
-                file_name = evidence.get('file_name', '不明')
-                creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
                 
-                # 分析状態の確認（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
-                phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
-                analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
+                # データ構造の違いを吸収して表示用データを取得
+                display_data = self._get_evidence_display_data(evidence)
                 
-                print(f"  {evidence_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
+                print(f"  {evidence_id:10} | {display_data['creation_date']:12} | {display_data['analysis_status']:12} | {display_data['file_name']}")
                 if temp_id:
                     print(f"             (元ID: {temp_id})")
         
@@ -1533,14 +1620,11 @@ class Phase1MultiRunner:
             print("-"*70)
             for evidence in sorted(pending_evidence, key=lambda x: x.get('temp_id', '')):
                 temp_id = evidence.get('temp_id', '不明')
-                file_name = evidence.get('file_name', '不明')
-                creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
                 
-                # 分析状態の確認（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
-                phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
-                analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
+                # データ構造の違いを吸収して表示用データを取得
+                display_data = self._get_evidence_display_data(evidence)
                 
-                print(f"  {temp_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
+                print(f"  {temp_id:10} | {display_data['creation_date']:12} | {display_data['analysis_status']:12} | {display_data['file_name']}")
         
         # 未分類証拠の表示
         if unclassified_evidence:
@@ -1675,32 +1759,26 @@ class Phase1MultiRunner:
                     evidence_id = evidence.get('evidence_id', '')
                     temp_id = evidence.get('temp_id', '')
                     
-                    # メタデータと分析内容を取得（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
-                    metadata = evidence.get('complete_metadata', {})
-                    phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
+                    # データ構造の違いを吸収してエクスポート用データを取得
+                    export_data = self._get_evidence_export_data(evidence)
                     
-                    creation_date = metadata.get('creation_date', '')
-                    file_name = evidence.get('file_name', evidence.get('original_filename', ''))
-                    document_type = phase1_analysis.get('document_type', '')
-                    author = phase1_analysis.get('author', '')
-                    recipient = phase1_analysis.get('recipient', '')
-                    summary = phase1_analysis.get('complete_description', '')
-                    gdrive_file_id = evidence.get('gdrive_file_id', '')
+                    gdrive_file_id = evidence.get('gdrive_file_id', '') or evidence.get('complete_metadata', {}).get('gdrive', {}).get('file_id', '')
                     
                     # 分析状態
-                    analysis_status = "分析済み" if phase1_analysis.get('complete_description') else "未分析"
+                    analysis_status = "分析済み" if export_data['complete_description'] else "未分析"
                     
+                    summary = export_data['complete_description'] or ''
                     writer.writerow({
                         '証拠種別': type_name,
                         'ステータス': status,
                         '証拠番号': evidence_id,
                         '仮番号': temp_id,
-                        '作成日': creation_date,
+                        '作成日': export_data['creation_date'],
                         '分析状態': analysis_status,
-                        'ファイル名': file_name,
-                        '文書種別': document_type,
-                        '作成者': author,
-                        '宛先': recipient,
+                        'ファイル名': export_data['file_name'],
+                        '文書種別': export_data['document_type'],
+                        '作成者': export_data['author'],
+                        '宛先': export_data['recipient'],
                         '要約': summary[:100] + '...' if len(summary) > 100 else summary,
                         'Google DriveファイルID': gdrive_file_id
                     })
@@ -1814,33 +1892,27 @@ class Phase1MultiRunner:
                 evidence_id = evidence.get('evidence_id', '')
                 temp_id = evidence.get('temp_id', '')
                 
-                # メタデータと分析内容を取得（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
-                metadata = evidence.get('complete_metadata', {})
-                phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
+                # データ構造の違いを吸収してエクスポート用データを取得
+                export_data = self._get_evidence_export_data(evidence)
                 
-                creation_date = metadata.get('creation_date', '')
-                file_name = evidence.get('file_name', evidence.get('original_filename', ''))
-                document_type = phase1_analysis.get('document_type', '')
-                author = phase1_analysis.get('author', '')
-                recipient = phase1_analysis.get('recipient', '')
-                summary = phase1_analysis.get('complete_description', '')
+                summary = export_data['complete_description'] or ''
                 
                 # 分析状態
-                analysis_status = "分析済み" if phase1_analysis.get('complete_description') else "未分析"
+                analysis_status = "分析済み" if export_data['complete_description'] else "未分析"
                 
                 # セルに値を設定
                 row_data = [
-                    type_name,      # 証拠種別
-                    status,
-                    evidence_id,
-                    temp_id,
-                    creation_date,
-                    analysis_status,
-                    file_name,
-                    document_type,
-                    author,
-                    recipient,
-                    summary
+                    type_name,                      # 証拠種別
+                    status,                         # ステータス
+                    evidence_id,                    # 証拠番号
+                    temp_id,                        # 仮番号
+                    export_data['creation_date'],   # 作成日
+                    analysis_status,                # 分析状態
+                    export_data['file_name'],       # ファイル名
+                    export_data['document_type'],   # 文書種別
+                    export_data['author'],          # 作成者
+                    export_data['recipient'],       # 宛先
+                    summary                         # 要約
                 ]
                 
                 for col_idx, value in enumerate(row_data, 1):
