@@ -99,6 +99,30 @@ python3 run_phase1_multi.py
 
 ---
 
+## 🔄 最新版への更新方法
+
+既にインストール済みで、最新版に更新したい場合:
+
+### 自動更新（推奨）
+
+```bash
+cd /Users/ogaiku/create-junbisyomen  # あなたのローカルパス
+bash update_local.sh
+```
+
+### 手動更新
+
+```bash
+cd /Users/ogaiku/create-junbisyomen
+git checkout main
+git pull origin main
+pip install -r requirements.txt --upgrade
+```
+
+詳細は [UPDATE_LOCAL_FROM_GITHUB.md](UPDATE_LOCAL_FROM_GITHUB.md) をご覧ください。
+
+---
+
 ## 📦 詳細なインストール手順
 
 ### 1. リポジトリのクローン
