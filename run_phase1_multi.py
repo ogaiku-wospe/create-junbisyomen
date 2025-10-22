@@ -2407,7 +2407,9 @@ class Phase1MultiRunner:
         """Google Drive URLからファイルをダウンロード
         
         Args:
-            gdrive_url: Google DriveのURL（https://drive.google.com/file/d/FILE_ID/view など）
+            gdrive_url: Google DriveのURL
+                - https://drive.google.com/file/d/FILE_ID/view
+                - https://docs.google.com/spreadsheets/d/FILE_ID/edit
             output_path: ダウンロード先パス
         
         Returns:
@@ -2418,10 +2420,16 @@ class Phase1MultiRunner:
             import re
             
             # パターン1: https://drive.google.com/file/d/FILE_ID/view
-            match = re.search(r'/d/([a-zA-Z0-9_-]+)', gdrive_url)
+            match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', gdrive_url)
             if not match:
-                # パターン2: https://drive.google.com/open?id=FILE_ID
+                # パターン2: https://docs.google.com/spreadsheets/d/FILE_ID/edit
+                match = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', gdrive_url)
+            if not match:
+                # パターン3: https://drive.google.com/open?id=FILE_ID
                 match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', gdrive_url)
+            if not match:
+                # パターン4: 汎用的な /d/ パターン
+                match = re.search(r'/d/([a-zA-Z0-9_-]+)', gdrive_url)
             
             if not match:
                 print(f"❌ 無効なGoogle Drive URL: {gdrive_url}")
@@ -2435,25 +2443,63 @@ class Phase1MultiRunner:
                 print("❌ Google Driveサービスに接続できません")
                 return False
             
-            # ファイルをダウンロード
+            # ファイル情報を取得してMIMEタイプを確認
             import io
             from googleapiclient.http import MediaIoBaseDownload
             
-            request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
-            fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, request)
+            file_metadata = service.files().get(
+                fileId=file_id,
+                fields='mimeType, name',
+                supportsAllDrives=True
+            ).execute()
             
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-                if status:
-                    print(f"   ダウンロード進行中: {int(status.progress() * 100)}%")
+            mime_type = file_metadata.get('mimeType', '')
+            file_name = file_metadata.get('name', 'unknown')
             
-            # ファイルに書き込み
-            with open(output_path, 'wb') as f:
-                f.write(fh.getvalue())
+            print(f"   ファイル名: {file_name}")
+            print(f"   ファイルタイプ: {mime_type}")
             
-            print(f"✅ ダウンロード完了: {output_path}")
+            # Google Spreadsheetsの場合はExcel形式でエクスポート
+            if mime_type == 'application/vnd.google-apps.spreadsheet':
+                print("   📊 Google Spreadsheetsを検出 → Excel形式でエクスポート中...")
+                
+                # Excel形式でエクスポート
+                request = service.files().export_media(
+                    fileId=file_id,
+                    mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, request)
+                
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+                    if status:
+                        print(f"   ダウンロード進行中: {int(status.progress() * 100)}%")
+                
+                # ファイルに書き込み
+                with open(output_path, 'wb') as f:
+                    f.write(fh.getvalue())
+                
+                print(f"✅ ダウンロード完了: {output_path}")
+            else:
+                # 通常のファイルダウンロード
+                request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, request)
+                
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+                    if status:
+                        print(f"   ダウンロード進行中: {int(status.progress() * 100)}%")
+                
+                # ファイルに書き込み
+                with open(output_path, 'wb') as f:
+                    f.write(fh.getvalue())
+                
+                print(f"✅ ダウンロード完了: {output_path}")
             return True
             
         except Exception as e:
@@ -2477,7 +2523,8 @@ class Phase1MultiRunner:
         # ファイルパスまたはGoogle Drive URLの入力
         print("\n編集したCSV/Excelファイルを指定してください:")
         print("  1. ローカルファイルパス（絶対パスまたは相対パス、拡張子: .csv, .xlsx）")
-        print("  2. Google Drive URL（https://drive.google.com/file/d/.../view）")
+        print("  2. Google Drive ファイルURL（https://drive.google.com/file/d/.../view）")
+        print("  3. Google Spreadsheets URL（https://docs.google.com/spreadsheets/d/.../edit）")
         file_input = input("\nファイルパスまたはURL: ").strip()
         
         if not file_input:
@@ -2485,7 +2532,7 @@ class Phase1MultiRunner:
             return
         
         # Google Drive URLかどうかを判定
-        is_gdrive_url = file_input.startswith('http') and 'drive.google.com' in file_input
+        is_gdrive_url = file_input.startswith('http') and ('drive.google.com' in file_input or 'docs.google.com' in file_input)
         
         if is_gdrive_url:
             # Google Drive URLからダウンロード
@@ -2495,19 +2542,28 @@ class Phase1MultiRunner:
             import tempfile
             temp_dir = tempfile.gettempdir()
             
-            # ファイル拡張子を推測（URLから判定困難な場合はユーザーに確認）
-            print("\nファイル形式を選択してください:")
-            print("  1. CSV形式 (.csv)")
-            print("  2. Excel形式 (.xlsx)")
-            format_choice = input("\n> ").strip()
+            # Google SpreadsheetsのURLかどうかを判定
+            import re
+            is_spreadsheet = bool(re.search(r'/spreadsheets/d/', file_input))
             
-            if format_choice == '1':
-                file_ext = '.csv'
-            elif format_choice == '2':
+            if is_spreadsheet:
+                # Google Spreadsheetsの場合は自動的にExcel形式
+                print("   📊 Google Spreadsheetsを検出 → Excel形式として処理します")
                 file_ext = '.xlsx'
             else:
-                print("❌ 無効な選択です")
-                return
+                # 通常のGoogle Driveファイルの場合はユーザーに確認
+                print("\nファイル形式を選択してください:")
+                print("  1. CSV形式 (.csv)")
+                print("  2. Excel形式 (.xlsx)")
+                format_choice = input("\n> ").strip()
+                
+                if format_choice == '1':
+                    file_ext = '.csv'
+                elif format_choice == '2':
+                    file_ext = '.xlsx'
+                else:
+                    print("❌ 無効な選択です")
+                    return
             
             temp_filename = f"imported_evidence{file_ext}"
             file_path = os.path.join(temp_dir, temp_filename)
