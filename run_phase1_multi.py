@@ -1475,19 +1475,44 @@ class Phase1MultiRunner:
             '不明'
         )
         
-        # 作成日の取得（複数の場所を試行）
-        creation_date = (
-            evidence.get('complete_metadata', {}).get('creation_date') or
-            evidence.get('complete_metadata', {}).get('basic', {}).get('created_time', '')[:10] or  # YYYY-MM-DD部分のみ
-            evidence.get('complete_metadata', {}).get('format_specific', {}).get('document_info', {}).get('CreationDate', '')[:10] or
-            '不明'
-        )
-        
         # 分析結果の取得（データ構造の違いを吸収）
         phase1_analysis = evidence.get('phase1_complete_analysis', {})
         
         # 新しい構造: phase1_complete_analysis.ai_analysis.full_content.complete_description
         ai_analysis = phase1_analysis.get('ai_analysis', {})
+        
+        # 作成日の取得（優先順位：AI分析結果 > PDFメタデータ > ファイルシステム）
+        # 1. AI分析結果から文書の作成日を取得（最優先）
+        document_date = None
+        if ai_analysis:
+            objective_analysis = ai_analysis.get('objective_analysis', {})
+            temporal_info = objective_analysis.get('temporal_information', {})
+            document_date = temporal_info.get('document_date')
+        
+        # 2. 旧構造のフォールバック
+        if not document_date:
+            document_date = (
+                phase1_analysis.get('objective_analysis', {}).get('temporal_information', {}).get('document_date') or
+                evidence.get('temporal_information', {}).get('document_date')
+            )
+        
+        # 3. PDFメタデータから取得（フォールバック）
+        if not document_date:
+            pdf_date = evidence.get('complete_metadata', {}).get('format_specific', {}).get('document_info', {}).get('CreationDate', '')
+            if pdf_date and len(pdf_date) >= 10:
+                # "D:20220103..." -> "2022-01-03" に変換
+                if pdf_date.startswith('D:'):
+                    pdf_date = pdf_date[2:]
+                if len(pdf_date) >= 8:
+                    document_date = f"{pdf_date[:4]}-{pdf_date[4:6]}-{pdf_date[6:8]}"
+        
+        # 4. ファイルシステム上の作成日（最終フォールバック）
+        if not document_date:
+            fs_date = evidence.get('complete_metadata', {}).get('basic', {}).get('created_time', '')
+            if fs_date:
+                document_date = fs_date[:10]  # YYYY-MM-DD部分のみ
+        
+        creation_date = document_date or '不明'
         if ai_analysis:
             full_content = ai_analysis.get('full_content', {})
             complete_description = full_content.get('complete_description')
