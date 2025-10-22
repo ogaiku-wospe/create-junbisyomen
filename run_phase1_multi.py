@@ -1497,13 +1497,14 @@ class Phase1MultiRunner:
             evidence_id = evidence.get('evidence_id', '')
             evidence_number = evidence.get('evidence_number', '')
             
-            # 整理状態を判定
-            # 1. 確定済み: evidence_numberが "甲1" や "乙2" のような形式
-            if evidence_number and not evidence_number.startswith('甲tmp') and not evidence_number.startswith('乙tmp'):
-                confirmed_evidence.append(evidence)
-            # 2. 整理済み_未確定: evidence_idが "tmp_" や "tmp_ko_" で始まる
-            elif evidence_id.startswith('tmp_'):
+            # 整理状態を判定（優先順位が重要）
+            # 1. 整理済み_未確定: evidence_idが "tmp_" で始まる（最優先）
+            if evidence_id.startswith('tmp_'):
                 pending_evidence.append(evidence)
+            # 2. 確定済み: evidence_numberが "甲1" や "乙2" のような形式
+            #    （"甲tmp" や "乙tmp" で始まらない、かつ証拠番号が存在する）
+            elif evidence_number and not evidence_number.startswith('甲tmp') and not evidence_number.startswith('乙tmp'):
+                confirmed_evidence.append(evidence)
             # 3. 未分類: その他
             else:
                 unclassified_evidence.append(evidence)
