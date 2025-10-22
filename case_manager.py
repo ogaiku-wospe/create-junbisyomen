@@ -154,10 +154,13 @@ class CaseManager:
             
             # 各フォルダが事件フォルダかチェック
             for folder in folders:
+                folder_name = folder['name']
                 case_info = self._analyze_case_folder(service, folder)
                 if case_info:
                     cases.append(case_info)
                     print(f"  ✅ 事件フォルダ検出: {case_info['case_name']}")
+                else:
+                    print(f"  ⏭️  スキップ: {folder_name} (事件フォルダの条件を満たしていません)")
             
             # キャッシュに保存
             self._save_cache(cases)
@@ -198,13 +201,19 @@ class CaseManager:
             items = results.get('files', [])
             item_names = [item['name'] for item in items]
             
-            # 事件フォルダの条件チェック
-            is_case_folder = any(
-                indicator in item_names 
-                for indicator in gconfig.CASE_FOLDER_INDICATORS
-            )
+            # 事件フォルダの条件チェック（デバッグ情報付き）
+            matched_indicators = [
+                indicator for indicator in gconfig.CASE_FOLDER_INDICATORS
+                if indicator in item_names
+            ]
+            is_case_folder = len(matched_indicators) > 0
             
             if not is_case_folder:
+                # デバッグ: 条件を満たしていない理由を表示
+                if os.environ.get('DEBUG_CASE_DETECTION'):
+                    print(f"      ❌ {folder_name}: 事件フォルダ判定ファイルが見つかりません")
+                    print(f"         検出されたファイル: {', '.join(item_names[:5])}{'...' if len(item_names) > 5 else ''}")
+                    print(f"         必要なファイル: {', '.join(gconfig.CASE_FOLDER_INDICATORS)}")
                 return None
             
             # 事件情報を構築
