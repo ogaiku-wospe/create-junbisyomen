@@ -594,7 +594,7 @@ class Phase1MultiRunner:
         print("  5. 証拠分析一覧を表示")
         print("  6. 証拠一覧をエクスポート（CSV/Excel）")
         print("  7. 時系列ストーリーの生成（証拠を時系列で整理）")
-        print("  8. 依頼者発言・メモの管理 🆕")
+        print("  8. 依頼者発言・メモの管理")
         print("\n【システム管理】")
         print("  9. database.jsonの状態確認")
         print("  10. 事件を切り替え")
@@ -1520,8 +1520,8 @@ class Phase1MultiRunner:
                 creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
                 
                 # 分析状態の確認
-                full_content = evidence.get('full_content', {})
-                analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
+                phase1_analysis = evidence.get('phase1_complete_analysis', {})
+                analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
                 
                 print(f"  {evidence_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
                 if temp_id:
@@ -1537,8 +1537,8 @@ class Phase1MultiRunner:
                 creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
                 
                 # 分析状態の確認
-                full_content = evidence.get('full_content', {})
-                analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
+                phase1_analysis = evidence.get('phase1_complete_analysis', {})
+                analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
                 
                 print(f"  {temp_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
         
@@ -1677,18 +1677,18 @@ class Phase1MultiRunner:
                     
                     # メタデータと分析内容を取得
                     metadata = evidence.get('complete_metadata', {})
-                    full_content = evidence.get('full_content', {})
+                    phase1_analysis = evidence.get('phase1_complete_analysis', {})
                     
                     creation_date = metadata.get('creation_date', '')
                     file_name = evidence.get('file_name', evidence.get('original_filename', ''))
-                    document_type = full_content.get('document_type', '')
-                    author = full_content.get('author', '')
-                    recipient = full_content.get('recipient', '')
-                    summary = full_content.get('complete_description', '')
+                    document_type = phase1_analysis.get('document_type', '')
+                    author = phase1_analysis.get('author', '')
+                    recipient = phase1_analysis.get('recipient', '')
+                    summary = phase1_analysis.get('complete_description', '')
                     gdrive_file_id = evidence.get('gdrive_file_id', '')
                     
                     # 分析状態
-                    analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
+                    analysis_status = "分析済み" if phase1_analysis.get('complete_description') else "未分析"
                     
                     writer.writerow({
                         '証拠種別': type_name,
@@ -1816,17 +1816,17 @@ class Phase1MultiRunner:
                 
                 # メタデータと分析内容を取得
                 metadata = evidence.get('complete_metadata', {})
-                full_content = evidence.get('full_content', {})
+                phase1_analysis = evidence.get('phase1_complete_analysis', {})
                 
                 creation_date = metadata.get('creation_date', '')
                 file_name = evidence.get('file_name', evidence.get('original_filename', ''))
-                document_type = full_content.get('document_type', '')
-                author = full_content.get('author', '')
-                recipient = full_content.get('recipient', '')
-                summary = full_content.get('complete_description', '')
+                document_type = phase1_analysis.get('document_type', '')
+                author = phase1_analysis.get('author', '')
+                recipient = phase1_analysis.get('recipient', '')
+                summary = phase1_analysis.get('complete_description', '')
                 
                 # 分析状態
-                analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
+                analysis_status = "分析済み" if phase1_analysis.get('complete_description') else "未分析"
                 
                 # セルに値を設定
                 row_data = [
