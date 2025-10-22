@@ -1684,7 +1684,7 @@ class TimelineBuilder:
         """
         try:
             # Google Drive サービスを取得
-            service = self.case_manager.get_drive_service()
+            service = self.case_manager.get_google_drive_service()
             if not service:
                 print("⚠️ Google Drive サービスが利用できません。")
                 return None
