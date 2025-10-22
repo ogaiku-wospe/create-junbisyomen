@@ -2093,15 +2093,29 @@ class Phase1MultiRunner:
         usage = ai_analysis.get('usage_suggestions', {})
         extended['推奨される使用方法'] = usage.get('recommended_usage', '')
         
-        # OCR結果（複数の可能なパスを試行）
+        # OCR結果（実際に読み取られた文字列を取得）
         ocr_text = ''
         
-        # パス1: file_processing_result.content.total_text（全ページ統合テキスト）
-        file_content = analysis.get('file_processing_result', {}).get('content', {})
-        ocr_text = file_content.get('total_text', '')
+        # パス1: ai_analysis.full_content.ocr_results.extracted_text（Vision APIのOCR結果）← 最優先
+        ocr_results = full_content.get('ocr_results', {})
+        ocr_text = ocr_results.get('extracted_text', '')
         
-        # パス2: file_processing_result.content.pages（各ページのテキストを結合）
-        if not ocr_text or ocr_text.strip() == '' or '\u0001' in ocr_text[:20]:
+        # パス2: ai_analysis.full_content.textual_content.extracted_text（代替パス）
+        if not ocr_text or ocr_text.strip() == '':
+            textual_content = full_content.get('textual_content', {})
+            ocr_text = textual_content.get('extracted_text', '')
+        
+        # パス3: file_processing_result.content.total_text（PDF直接抽出）
+        if not ocr_text or ocr_text.strip() == '':
+            file_content = analysis.get('file_processing_result', {}).get('content', {})
+            total_text = file_content.get('total_text', '')
+            # 制御文字のみでないか確認
+            if total_text and not (len(total_text) > 0 and '\u0001' in total_text[:20]):
+                ocr_text = total_text
+        
+        # パス4: file_processing_result.content.pages（各ページのテキストを結合）
+        if not ocr_text or ocr_text.strip() == '':
+            file_content = analysis.get('file_processing_result', {}).get('content', {})
             pages = file_content.get('pages', [])
             if pages:
                 page_texts = []
@@ -2110,27 +2124,15 @@ class Phase1MultiRunner:
                     # 制御文字のみの場合はスキップ
                     if page_text and not all(c in '\u0001\n ' for c in page_text[:50]):
                         page_texts.append(f"--- ページ{page.get('page_number', 0)} ---\n{page_text}")
-                ocr_text = '\n\n'.join(page_texts) if page_texts else ''
+                if page_texts:
+                    ocr_text = '\n\n'.join(page_texts)
         
-        # パス3: ai_analysis.full_content.complete_description（Vision APIの説明文）
-        # OCRテキストが無効な場合、Vision APIの説明を代替として使用
-        if not ocr_text or ocr_text.strip() == '' or '\u0001' in ocr_text[:20]:
-            complete_desc = full_content.get('complete_description', '')
-            if complete_desc:
-                ocr_text = f"[Vision API分析結果]\n{complete_desc}"
-        
-        # パス4: file_processing_result.content.text（旧形式）
-        if not ocr_text:
-            ocr_text = file_content.get('text', '')
-        
-        # パス5: file_processing_result.ocr_text（別の形式）
-        if not ocr_text:
-            ocr_text = analysis.get('file_processing_result', {}).get('ocr_text', '')
-        
-        # パス6: complete_metadata.ocr（別の保存場所）
-        if not ocr_text:
-            metadata = evidence.get('complete_metadata', {})
-            ocr_text = metadata.get('ocr_text', '')
+        # パス5以降: 旧形式の様々なパス
+        if not ocr_text or ocr_text.strip() == '':
+            file_content = analysis.get('file_processing_result', {}).get('content', {})
+            ocr_text = file_content.get('text', '') or \
+                      analysis.get('file_processing_result', {}).get('ocr_text', '') or \
+                      evidence.get('complete_metadata', {}).get('ocr_text', '')
         
         extended['OCRテキスト'] = ocr_text
         
