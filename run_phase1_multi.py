@@ -2325,10 +2325,134 @@ class Phase1MultiRunner:
             print(f"   ファイル: {output_path}")
             print(f"   件数: {len(evidence_list)}件")
             
+            # Google Driveへのアップロードを確認
+            upload_choice = input("\nGoogle Driveにもアップロードしますか？ (y/n): ").strip().lower()
+            if upload_choice == 'y':
+                gdrive_url = self._upload_export_file_to_gdrive(output_path, filename)
+                if gdrive_url:
+                    print(f"\n✅ Google Driveにアップロードしました")
+                    print(f"   URL: {gdrive_url}")
+            
         except Exception as e:
             print(f"\n❌ エクスポートに失敗しました: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _upload_export_file_to_gdrive(self, local_path: str, filename: str) -> Optional[str]:
+        """エクスポートファイルをGoogle Driveにアップロード
+        
+        Args:
+            local_path: ローカルファイルパス
+            filename: ファイル名
+        
+        Returns:
+            Google DriveのURL（失敗時はNone）
+        """
+        try:
+            service = self.case_manager.get_google_drive_service()
+            if not service:
+                print("❌ Google Driveサービスに接続できません")
+                return None
+            
+            from googleapiclient.http import MediaFileUpload
+            
+            # 事件フォルダIDを取得
+            database = self.db_manager.load_database()
+            case_folder_id = database.get('metadata', {}).get('case_folder_id')
+            if not case_folder_id:
+                print("❌ 事件フォルダIDが見つかりません")
+                return None
+            
+            # ファイルタイプを判定
+            file_ext = os.path.splitext(filename)[1].lower()
+            if file_ext == '.csv':
+                mime_type = 'text/csv'
+            elif file_ext == '.xlsx':
+                mime_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            else:
+                mime_type = 'application/octet-stream'
+            
+            file_metadata = {
+                'name': filename,
+                'parents': [case_folder_id],
+                'mimeType': mime_type
+            }
+            
+            media = MediaFileUpload(local_path, mimetype=mime_type, resumable=True)
+            
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                supportsAllDrives=True,
+                fields='id, name, webViewLink'
+            ).execute()
+            
+            return file.get('webViewLink', f"https://drive.google.com/file/d/{file['id']}/view")
+            
+        except Exception as e:
+            print(f"❌ Google Driveへのアップロード失敗: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _download_file_from_gdrive_url(self, gdrive_url: str, output_path: str) -> bool:
+        """Google Drive URLからファイルをダウンロード
+        
+        Args:
+            gdrive_url: Google DriveのURL（https://drive.google.com/file/d/FILE_ID/view など）
+            output_path: ダウンロード先パス
+        
+        Returns:
+            成功時True、失敗時False
+        """
+        try:
+            # URLからファイルIDを抽出
+            import re
+            
+            # パターン1: https://drive.google.com/file/d/FILE_ID/view
+            match = re.search(r'/d/([a-zA-Z0-9_-]+)', gdrive_url)
+            if not match:
+                # パターン2: https://drive.google.com/open?id=FILE_ID
+                match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', gdrive_url)
+            
+            if not match:
+                print(f"❌ 無効なGoogle Drive URL: {gdrive_url}")
+                return False
+            
+            file_id = match.group(1)
+            print(f"📥 ファイルID: {file_id}")
+            
+            service = self.case_manager.get_google_drive_service()
+            if not service:
+                print("❌ Google Driveサービスに接続できません")
+                return False
+            
+            # ファイルをダウンロード
+            import io
+            from googleapiclient.http import MediaIoBaseDownload
+            
+            request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+                if status:
+                    print(f"   ダウンロード進行中: {int(status.progress() * 100)}%")
+            
+            # ファイルに書き込み
+            with open(output_path, 'wb') as f:
+                f.write(fh.getvalue())
+            
+            print(f"✅ ダウンロード完了: {output_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Google Driveからのダウンロード失敗: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def import_csv_updates(self):
         """CSV編集内容をdatabase.jsonに反映"""
@@ -2342,19 +2466,56 @@ class Phase1MultiRunner:
         print("  完全モード: database.jsonの全データ（JSON列）")
         print("※ステータス、証拠番号などの識別子は編集できません")
         
-        # ファイルパスの入力
-        print("\n編集したCSV/Excelファイルのパスを入力してください")
-        print("（絶対パスまたは相対パス、拡張子: .csv, .xlsx）")
-        file_path = input("\nファイルパス: ").strip()
+        # ファイルパスまたはGoogle Drive URLの入力
+        print("\n編集したCSV/Excelファイルを指定してください:")
+        print("  1. ローカルファイルパス（絶対パスまたは相対パス、拡張子: .csv, .xlsx）")
+        print("  2. Google Drive URL（https://drive.google.com/file/d/.../view）")
+        file_input = input("\nファイルパスまたはURL: ").strip()
         
-        if not file_path:
+        if not file_input:
             print("キャンセルしました")
             return
         
-        # ファイルの存在確認
-        if not os.path.exists(file_path):
-            print(f"\n❌ ファイルが見つかりません: {file_path}")
-            return
+        # Google Drive URLかどうかを判定
+        is_gdrive_url = file_input.startswith('http') and 'drive.google.com' in file_input
+        
+        if is_gdrive_url:
+            # Google Drive URLからダウンロード
+            print("\n📥 Google Driveからダウンロード中...")
+            
+            # 一時ファイルパスを生成
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            
+            # ファイル拡張子を推測（URLから判定困難な場合はユーザーに確認）
+            print("\nファイル形式を選択してください:")
+            print("  1. CSV形式 (.csv)")
+            print("  2. Excel形式 (.xlsx)")
+            format_choice = input("\n> ").strip()
+            
+            if format_choice == '1':
+                file_ext = '.csv'
+            elif format_choice == '2':
+                file_ext = '.xlsx'
+            else:
+                print("❌ 無効な選択です")
+                return
+            
+            temp_filename = f"imported_evidence{file_ext}"
+            file_path = os.path.join(temp_dir, temp_filename)
+            
+            # Google Driveからダウンロード
+            if not self._download_file_from_gdrive_url(file_input, file_path):
+                print("❌ ダウンロードに失敗しました")
+                return
+        else:
+            # ローカルファイルパス
+            file_path = file_input
+            
+            # ファイルの存在確認
+            if not os.path.exists(file_path):
+                print(f"\n❌ ファイルが見つかりません: {file_path}")
+                return
         
         try:
             import csv
@@ -3023,6 +3184,14 @@ class Phase1MultiRunner:
             print(f"\n✅ Excel形式でエクスポートしました")
             print(f"   ファイル: {output_path}")
             print(f"   件数: {len(evidence_list)}件")
+            
+            # Google Driveへのアップロードを確認
+            upload_choice = input("\nGoogle Driveにもアップロードしますか？ (y/n): ").strip().lower()
+            if upload_choice == 'y':
+                gdrive_url = self._upload_export_file_to_gdrive(output_path, filename)
+                if gdrive_url:
+                    print(f"\n✅ Google Driveにアップロードしました")
+                    print(f"   URL: {gdrive_url}")
             
         except Exception as e:
             print(f"\n❌ エクスポートに失敗しました: {e}")
