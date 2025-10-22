@@ -31,13 +31,25 @@
 
 ## 🚀 実行手順
 
-### ステップ1: ファイルを配置
+### ステップ1: GitHubから最新版を取得
 
-以下の3つのファイルをプロジェクトルート（`/Users/ogaiku/create-junbisyomen/`）にコピーしてください：
+ローカルのプロジェクトディレクトリで以下のコマンドを実行してください：
+
+```bash
+cd /Users/ogaiku/create-junbisyomen
+git pull origin main
+```
+
+これにより、以下のファイルが自動的にダウンロードされます：
 
 1. **`.gitignore`** - Git管理から除外するファイルのパターン
 2. **`cleanup_project.sh`** - Mac/Linux用クリーンアップスクリプト
 3. **`cleanup_project.bat`** - Windows用クリーンアップスクリプト
+4. **`CLEANUP_INSTRUCTIONS.md`** - この手順書（本ファイル）
+
+> **💡 Tips**: GitHubリポジトリから個別にダウンロードすることもできます：
+> - リポジトリURL: https://github.com/ogaiku-wospe/create-junbisyomen
+> - 各ファイルのRawボタンから直接ダウンロード可能
 
 ### ステップ2: スクリプトに実行権限を付与（Mac/Linuxのみ）
 
