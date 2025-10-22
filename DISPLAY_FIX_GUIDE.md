@@ -34,19 +34,32 @@ AI分析結果（文書種別、作成者、宛先、要約など）が全て空
 
 AI分析結果の保存先が変更されていたにもかかわらず、表示・エクスポートのロジックが古いフィールドを参照していました：
 
-**旧フィールド（使用されていた）：**
+**旧フィールド（問題のあったコード）：**
 ```python
 full_content = evidence.get('full_content', {})
 document_type = full_content.get('document_type', '')
 complete_description = full_content.get('complete_description', '')
 ```
 
-**新フィールド（正しい）：**
+**新フィールド（現在の保存先）：**
 ```python
 phase1_analysis = evidence.get('phase1_complete_analysis', {})
 document_type = phase1_analysis.get('document_type', '')
 complete_description = phase1_analysis.get('complete_description', '')
 ```
+
+**🔄 重要: 既存データとの互換性**
+
+新しいコードでは`phase1_complete_analysis`に保存されますが、既存の事件データでは`full_content`に保存されている可能性があります。そのため、**両方のフィールドをチェックする互換性対応**を実装しています：
+
+```python
+# 互換性対応（phase1_complete_analysis優先、full_contentフォールバック）
+phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
+document_type = phase1_analysis.get('document_type', '')
+complete_description = phase1_analysis.get('complete_description', '')
+```
+
+この方法により、新しい事件でも既存の事件でも正しく動作します。
 
 ## 修正内容
 
@@ -61,10 +74,10 @@ full_content = evidence.get('full_content', {})
 analysis_status = "✅ 分析済み" if full_content.get('complete_description') else "⚠️  未分析"
 ```
 
-**After:**
+**After（互換性対応版）:**
 ```python
-# 分析状態の確認
-phase1_analysis = evidence.get('phase1_complete_analysis', {})
+# 分析状態の確認（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
+phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
 analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
 ```
 
@@ -90,11 +103,11 @@ gdrive_file_id = evidence.get('gdrive_file_id', '')
 analysis_status = "分析済み" if full_content.get('complete_description') else "未分析"
 ```
 
-**After:**
+**After（互換性対応版）:**
 ```python
-# メタデータと分析内容を取得
+# メタデータと分析内容を取得（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
 metadata = evidence.get('complete_metadata', {})
-phase1_analysis = evidence.get('phase1_complete_analysis', {})
+phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
 
 creation_date = metadata.get('creation_date', '')
 file_name = evidence.get('file_name', evidence.get('original_filename', ''))
@@ -112,7 +125,7 @@ analysis_status = "分析済み" if phase1_analysis.get('complete_description') 
 
 **修正箇所：** `run_phase1_multi.py` L1819, L1823-1826, L1829
 
-CSVエクスポートと同様の修正を適用しました。
+CSVエクスポートと同様の互換性対応を適用しました。
 
 ### 4. UI改善
 
@@ -181,16 +194,26 @@ AI分析済みの証拠が正しく「✅ 分析済み」と表示されます�
 
 ### 重要なポイント
 
-1. **`phase1_complete_analysis`が正しいフィールド**
-   - AI分析結果（`ai_analyzer_complete.py`）はここに保存される
+1. **`phase1_complete_analysis`が現在の保存先**
+   - 新しいコード（`run_phase1_multi.py` L923）ではここに保存される
    - `complete_description`, `document_type`, `author`, `recipient`などが含まれる
 
-2. **`full_content`は廃止済み**
+2. **`full_content`は旧フィールド（互換性維持）**
    - 古いシステムで使用されていたフィールド
-   - 現在は使用されていない（空または古いデータが残っている可能性）
+   - **既存の事件データではこちらにデータが保存されている可能性がある**
+   - 新しいコードでは使用しないが、既存データとの互換性のため参照可能にしている
 
-3. **表示・エクスポートは`phase1_complete_analysis`を参照すべき**
-   - 全ての表示ロジックで統一的に`phase1_complete_analysis`を使用
+3. **互換性対応が重要**
+   - `phase1_complete_analysis`を優先的にチェック
+   - 存在しない場合は`full_content`にフォールバック
+   - これにより新規事件と既存事件の両方で正しく動作する
+
+4. **表示・エクスポートは両方のフィールドをチェック**
+   ```python
+   # 互換性対応の記述方法
+   phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
+   ```
+   - Pythonの`or`演算子により、左側が空辞書の場合は右側を使用
 
 ## テスト方法
 
@@ -236,15 +259,23 @@ python run_phase1_multi.py
 
 ## 今後の注意点
 
-### 1. データフィールドの参照先を統一
-- AI分析結果は常に`phase1_complete_analysis`から取得
-- `full_content`は使用しない（廃止済みフィールド）
+### 1. データフィールドの参照先を統一（互換性対応）
+- **新しいコード**: AI分析結果を`phase1_complete_analysis`に保存
+- **参照時**: 両方のフィールドをチェック（互換性維持）
+  ```python
+  phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
+  ```
+- **理由**: 既存事件データでは`full_content`に保存されている可能性があるため
 
 ### 2. 新機能追加時のチェックポイント
 新しい表示・エクスポート機能を追加する際は、以下を確認：
-- [ ] `phase1_complete_analysis`フィールドを参照している
-- [ ] `full_content`フィールドを使用していない
-- [ ] 分析状態の判定に`phase1_complete_analysis.get('complete_description')`を使用
+- [ ] `phase1_complete_analysis`を優先的に参照している
+- [ ] **互換性のため`full_content`もフォールバックとして参照している**
+- [ ] 以下のパターンを使用：
+  ```python
+  phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
+  ```
+- [ ] 分析状態の判定に`phase1_analysis.get('complete_description')`を使用
 
 ### 3. データ構造変更時の対応
 データ構造を変更する場合は、以下の箇所を全て確認：
@@ -261,8 +292,16 @@ python run_phase1_multi.py
 
 ## コミット情報
 
+### 初回修正（フィールド参照修正）
 **コミットハッシュ:** f6072e9  
 **コミット日時:** 2025-10-22  
+**内容:** `full_content` → `phase1_complete_analysis` に変更
+
+### 互換性対応
+**コミットハッシュ:** 46af77b  
+**コミット日時:** 2025-10-22  
+**内容:** 既存データとの互換性確保（両フィールドチェック）
+
 **ブランチ:** main
 
 ---
