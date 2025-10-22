@@ -1,62 +1,56 @@
-# 機密情報（絶対にアップロードしない）
-credentials.json
-token.json
-.env
-
-# データベース（個人情報を含む可能性）
-database.json
-database_backup_*.json
-
-# ログファイル
-*.log
-phase1_complete.log
-
-# Python関連
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
+*.egg
 *.egg-info/
 dist/
 build/
+*.pyc
 
-# 仮想環境
+# Virtual Environment
 venv/
 env/
 ENV/
-.venv
+.venv/
 
-# IDE設定
+# Credentials and Tokens (SENSITIVE)
+credentials.json
+token.pickle
+*.pickle
+
+# Temporary State Files
+current_case.json
+database_uploaded.json
+
+# Log Files
+*.log
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# macOS
 .DS_Store
-.AppleDouble
-.LSOverride
 
-# 一時ファイル
+# OS
+Thumbs.db
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+.env.local
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
 *.bak
-*.tmp
-temp/
-tmp/
-backup_*/
-
-# スクリプト（一時的）
-fix_*.sh
-check_*.sh
-prepare_*.sh
-upload_*.sh
-
-# テスト関連
-.pytest_cache/
-.coverage
-htmlcov/
-
-# その他
-*.zip
-*.tar.gz
+*.backup
