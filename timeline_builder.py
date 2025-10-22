@@ -211,7 +211,7 @@ class TimelineBuilder:
         """
         try:
             case_id = self.current_case.get('case_id', 'unknown')
-            statements_path = os.path.join(gconfig.LOCAL_STORAGE_DIR, case_id, 'client_statements.json')
+            statements_path = os.path.join(gconfig.LOCAL_WORK_DIR, case_id, 'client_statements.json')
             
             if not os.path.exists(statements_path):
                 return []
@@ -232,7 +232,7 @@ class TimelineBuilder:
         """
         try:
             case_id = self.current_case.get('case_id', 'unknown')
-            context_path = os.path.join(gconfig.LOCAL_STORAGE_DIR, case_id, 'client_general_context.json')
+            context_path = os.path.join(gconfig.LOCAL_WORK_DIR, case_id, 'client_general_context.json')
             
             if not os.path.exists(context_path):
                 return []
@@ -256,7 +256,7 @@ class TimelineBuilder:
         """
         try:
             case_id = self.current_case.get('case_id', 'unknown')
-            case_dir = os.path.join(gconfig.LOCAL_STORAGE_DIR, case_id)
+            case_dir = os.path.join(gconfig.LOCAL_WORK_DIR, case_id)
             os.makedirs(case_dir, exist_ok=True)
             
             context_path = os.path.join(case_dir, 'client_general_context.json')
@@ -291,7 +291,7 @@ class TimelineBuilder:
         """
         try:
             case_id = self.current_case.get('case_id', 'unknown')
-            case_dir = os.path.join(gconfig.LOCAL_STORAGE_DIR, case_id)
+            case_dir = os.path.join(gconfig.LOCAL_WORK_DIR, case_id)
             os.makedirs(case_dir, exist_ok=True)
             
             statements_path = os.path.join(case_dir, 'client_statements.json')
@@ -1264,7 +1264,7 @@ class TimelineBuilder:
         
         # 出力ディレクトリを作成
         case_id = self.current_case.get('case_id', 'unknown')
-        output_dir = os.path.join(gconfig.LOCAL_STORAGE_DIR, case_id, 'timeline')
+        output_dir = os.path.join(gconfig.LOCAL_WORK_DIR, case_id, 'timeline')
         os.makedirs(output_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

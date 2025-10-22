@@ -634,7 +634,7 @@ B社から電話で支払い遅延について謝罪があった。
 ### Q5: 出力ファイルはどこに保存されますか？
 
 **A**: 
-- **ローカル保存**: `{LOCAL_STORAGE_DIR}/{case_id}/timeline/` ディレクトリに保存されます。
+- **ローカル保存**: `{LOCAL_WORK_DIR}/{case_id}/timeline/` ディレクトリに保存されます。
 - **Google Drive保存** 🆕: 自動的にGoogle Driveの事件フォルダ内の `timeline` サブフォルダにアップロードされます。
   - Google Driveにアップロードされたファイルはウェブリンクが表示されます。
   - 事件フォルダ構造: `事件フォルダ/timeline/timeline_YYYYMMDD_HHMMSS.{json|md|html|txt}`
@@ -679,7 +679,7 @@ B社から電話で支払い遅延について謝罪があった。
 }
 ```
 
-保存場所: `{LOCAL_STORAGE_DIR}/{case_id}/client_statements.json`
+保存場所: `{LOCAL_WORK_DIR}/{case_id}/client_statements.json`
 
 #### client_general_context.json（包括的情報）**🆕**
 
@@ -712,7 +712,7 @@ B社から電話で支払い遅延について謝罪があった。
 }
 ```
 
-保存場所: `{LOCAL_STORAGE_DIR}/{case_id}/client_general_context.json`
+保存場所: `{LOCAL_WORK_DIR}/{case_id}/client_general_context.json`
 
 **カテゴリ**:
 - 事件の背景: 事件全体の背景や前提となる状況

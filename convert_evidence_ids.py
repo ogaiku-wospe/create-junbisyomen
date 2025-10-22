@@ -115,7 +115,7 @@ class EvidenceIDConverter:
             バックアップファイルパス
         """
         case_id = self.current_case.get('case_id', 'unknown')
-        backup_dir = os.path.join(gconfig.LOCAL_STORAGE_DIR, case_id, 'backups')
+        backup_dir = os.path.join(gconfig.LOCAL_WORK_DIR, case_id, 'backups')
         os.makedirs(backup_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

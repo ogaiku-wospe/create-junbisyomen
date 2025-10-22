@@ -141,7 +141,7 @@ Google Driveに保存しますか？ (y/n):
 
 変換前に必ずローカルにバックアップを作成します。
 
-**保存場所**: `{LOCAL_STORAGE_DIR}/{case_id}/backups/database_backup_YYYYMMDD_HHMMSS.json`
+**保存場所**: `{LOCAL_WORK_DIR}/{case_id}/backups/database_backup_YYYYMMDD_HHMMSS.json`
 
 ### 2. 二段階確認
 
