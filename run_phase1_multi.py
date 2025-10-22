@@ -1519,8 +1519,8 @@ class Phase1MultiRunner:
                 file_name = evidence.get('file_name', '不明')
                 creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
                 
-                # 分析状態の確認
-                phase1_analysis = evidence.get('phase1_complete_analysis', {})
+                # 分析状態の確認（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
+                phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
                 analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
                 
                 print(f"  {evidence_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
@@ -1536,8 +1536,8 @@ class Phase1MultiRunner:
                 file_name = evidence.get('file_name', '不明')
                 creation_date = evidence.get('complete_metadata', {}).get('creation_date', '不明')
                 
-                # 分析状態の確認
-                phase1_analysis = evidence.get('phase1_complete_analysis', {})
+                # 分析状態の確認（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
+                phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
                 analysis_status = "✅ 分析済み" if phase1_analysis.get('complete_description') else "⚠️  未分析"
                 
                 print(f"  {temp_id:10} | {creation_date:12} | {analysis_status:12} | {file_name}")
@@ -1675,9 +1675,9 @@ class Phase1MultiRunner:
                     evidence_id = evidence.get('evidence_id', '')
                     temp_id = evidence.get('temp_id', '')
                     
-                    # メタデータと分析内容を取得
+                    # メタデータと分析内容を取得（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
                     metadata = evidence.get('complete_metadata', {})
-                    phase1_analysis = evidence.get('phase1_complete_analysis', {})
+                    phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
                     
                     creation_date = metadata.get('creation_date', '')
                     file_name = evidence.get('file_name', evidence.get('original_filename', ''))
@@ -1814,9 +1814,9 @@ class Phase1MultiRunner:
                 evidence_id = evidence.get('evidence_id', '')
                 temp_id = evidence.get('temp_id', '')
                 
-                # メタデータと分析内容を取得
+                # メタデータと分析内容を取得（phase1_complete_analysis優先、互換性のためfull_contentもチェック）
                 metadata = evidence.get('complete_metadata', {})
-                phase1_analysis = evidence.get('phase1_complete_analysis', {})
+                phase1_analysis = evidence.get('phase1_complete_analysis', {}) or evidence.get('full_content', {})
                 
                 creation_date = metadata.get('creation_date', '')
                 file_name = evidence.get('file_name', evidence.get('original_filename', ''))
