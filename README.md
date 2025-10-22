@@ -40,7 +40,7 @@ Phase1_Evidence Analysis Systemは、証拠ファイル（画像、PDF、Word、
 - ✨ **Claude Sonnet 4統合**: 高品質な日本語ナラティブ生成
 - ✨ **事実・証拠紐付け**: 各事実がどの証拠によって裏付けられているかを明確に記録
 - ✨ **自然言語改善機能**: 「もっと詳しく」などの指示でストーリーを対話的に改善
-- ✨ **多様な出力形式**: JSON、Markdown、HTML、テキスト形式でエクスポート
+- ✨ **多様な出力形式**: JSON、Markdown、HTML、テキスト形式でエクスポート + Google Drive自動アップロード 🆕
 - ✨ **database.json活用強化**: AI分析結果（related_facts、legal_significance）を最大限活用
 - ✨ **依頼者発言統合**: 
   - 日付指定あり: 特定の出来事に関する発言

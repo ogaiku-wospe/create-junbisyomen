@@ -46,6 +46,7 @@
    - HTML形式：ブラウザで見やすく表示
    - テキスト形式：シンプルなテキストファイル
    - すべての形式：上記すべてを一度に出力
+   - **🆕 自動Google Driveアップロード**: 全形式が自動的にGoogle Driveの事件フォルダにアップロードされます
 
 ---
 
@@ -632,7 +633,12 @@ B社から電話で支払い遅延について謝罪があった。
 
 ### Q5: 出力ファイルはどこに保存されますか？
 
-**A**: `{LOCAL_STORAGE_DIR}/{case_id}/timeline/` ディレクトリに保存されます。ファイル名には生成日時が含まれます。
+**A**: 
+- **ローカル保存**: `{LOCAL_STORAGE_DIR}/{case_id}/timeline/` ディレクトリに保存されます。
+- **Google Drive保存** 🆕: 自動的にGoogle Driveの事件フォルダ内の `timeline` サブフォルダにアップロードされます。
+  - Google Driveにアップロードされたファイルはウェブリンクが表示されます。
+  - 事件フォルダ構造: `事件フォルダ/timeline/timeline_YYYYMMDD_HHMMSS.{json|md|html|txt}`
+  - ファイル名には生成日時が含まれます（例: `timeline_20251022_143000.json`）
 
 ---
 

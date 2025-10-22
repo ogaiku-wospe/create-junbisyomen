@@ -42,6 +42,7 @@ try:
     from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
     from anthropic import Anthropic
     from dotenv import load_dotenv
+    from googleapiclient.http import MediaFileUpload
     
     # 環境変数の読み込み
     load_dotenv()
@@ -1318,6 +1319,11 @@ class TimelineBuilder:
             json.dump(timeline_data, f, ensure_ascii=False, indent=2)
         
         print(f"\n✅ JSONファイルを出力しました: {output_path}")
+        
+        # Google Driveにアップロード
+        file_name = os.path.basename(output_path)
+        self._upload_to_gdrive(output_path, file_name)
+        
         return output_path
     
     def _export_markdown(self, timeline_events: List[TimelineEvent], output_dir: str,
@@ -1417,6 +1423,11 @@ class TimelineBuilder:
             f.write('\n'.join(md_lines))
         
         print(f"\n✅ Markdownファイルを出力しました: {output_path}")
+        
+        # Google Driveにアップロード
+        file_name = os.path.basename(output_path)
+        self._upload_to_gdrive(output_path, file_name)
+        
         return output_path
     
     def _export_text(self, timeline_events: List[TimelineEvent], output_dir: str,
@@ -1447,6 +1458,11 @@ class TimelineBuilder:
             f.write('\n'.join(text_parts))
         
         print(f"\n✅ テキストファイルを出力しました: {output_path}")
+        
+        # Google Driveにアップロード
+        file_name = os.path.basename(output_path)
+        self._upload_to_gdrive(output_path, file_name)
+        
         return output_path
     
     def _export_html(self, timeline_events: List[TimelineEvent], output_dir: str,
@@ -1649,7 +1665,131 @@ class TimelineBuilder:
             f.write('\n'.join(html_parts))
         
         print(f"\n✅ HTMLファイルを出力しました: {output_path}")
+        
+        # Google Driveにアップロード
+        file_name = os.path.basename(output_path)
+        self._upload_to_gdrive(output_path, file_name)
+        
         return output_path
+    
+    def _upload_to_gdrive(self, local_file_path: str, file_name: str) -> Optional[str]:
+        """ファイルをGoogle Driveの事件フォルダにアップロード
+        
+        Args:
+            local_file_path: ローカルファイルパス
+            file_name: Google Drive上のファイル名
+        
+        Returns:
+            Google DriveのファイルID（成功時）、None（失敗時）
+        """
+        try:
+            # Google Drive サービスを取得
+            service = self.case_manager.get_drive_service()
+            if not service:
+                print("⚠️ Google Drive サービスが利用できません。")
+                return None
+            
+            # 事件フォルダIDを取得
+            case_folder_id = self.current_case.get('case_folder_id')
+            if not case_folder_id:
+                print("⚠️ 事件フォルダIDが見つかりません。")
+                return None
+            
+            # timelineサブフォルダを探す or 作成
+            timeline_folder_id = self._find_or_create_timeline_folder(service, case_folder_id)
+            if not timeline_folder_id:
+                print("⚠️ timelineフォルダの作成に失敗しました。")
+                return None
+            
+            # ファイルのMIMEタイプを判定
+            mime_type = self._get_mime_type(file_name)
+            
+            # ファイルメタデータ
+            file_metadata = {
+                'name': file_name,
+                'parents': [timeline_folder_id]
+            }
+            
+            # ファイルをアップロード
+            media = MediaFileUpload(local_file_path, mimetype=mime_type, resumable=True)
+            uploaded_file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, name, webViewLink'
+            ).execute()
+            
+            file_id = uploaded_file.get('id')
+            web_link = uploaded_file.get('webViewLink')
+            
+            print(f"✅ Google Driveにアップロードしました: {file_name}")
+            print(f"   📎 リンク: {web_link}")
+            
+            return file_id
+            
+        except Exception as e:
+            print(f"⚠️ Google Driveへのアップロードに失敗しました: {e}")
+            return None
+    
+    def _find_or_create_timeline_folder(self, service, parent_folder_id: str) -> Optional[str]:
+        """timelineサブフォルダを探す、なければ作成
+        
+        Args:
+            service: Google Drive サービス
+            parent_folder_id: 親フォルダ（事件フォルダ）のID
+        
+        Returns:
+            timelineフォルダのID
+        """
+        try:
+            # 既存のtimelineフォルダを検索
+            query = f"name='timeline' and '{parent_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            results = service.files().list(
+                q=query,
+                fields='files(id, name)',
+                pageSize=1
+            ).execute()
+            
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+            
+            # なければ作成
+            folder_metadata = {
+                'name': 'timeline',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [parent_folder_id]
+            }
+            
+            folder = service.files().create(
+                body=folder_metadata,
+                fields='id'
+            ).execute()
+            
+            print(f"📁 timelineフォルダを作成しました（Google Drive）")
+            return folder.get('id')
+            
+        except Exception as e:
+            print(f"❌ timelineフォルダの作成に失敗しました: {e}")
+            return None
+    
+    def _get_mime_type(self, file_name: str) -> str:
+        """ファイル名から MIMEタイプを判定
+        
+        Args:
+            file_name: ファイル名
+        
+        Returns:
+            MIMEタイプ
+        """
+        extension = os.path.splitext(file_name)[1].lower()
+        mime_types = {
+            '.json': 'application/json',
+            '.md': 'text/markdown',
+            '.txt': 'text/plain',
+            '.html': 'text/html',
+            '.htm': 'text/html'
+        }
+        return mime_types.get(extension, 'application/octet-stream')
 
 
 def main():
