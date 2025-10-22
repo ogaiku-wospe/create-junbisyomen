@@ -2071,8 +2071,17 @@ class Phase1MultiRunner:
         extended['文脈上の重要性'] = legal.get('contextual_importance', '')
         
         # 関連事実（最大5件）
+        # 複数の可能なパスを試行
+        provable_facts = []
+        
+        # パス1: related_facts.provable_facts
         related = ai_analysis.get('related_facts', {})
         provable_facts = related.get('provable_facts', [])
+        
+        # パス2: legal_significance.provable_facts（別の可能な場所）
+        if not provable_facts:
+            provable_facts = legal.get('provable_facts', [])
+        
         for i in range(5):
             if i < len(provable_facts):
                 fact = provable_facts[i]
@@ -2084,9 +2093,27 @@ class Phase1MultiRunner:
         usage = ai_analysis.get('usage_suggestions', {})
         extended['推奨される使用方法'] = usage.get('recommended_usage', '')
         
-        # OCR結果
+        # OCR結果（複数の可能なパスを試行）
+        ocr_text = ''
+        
+        # パス1: file_processing_result.content.ocr.text
         file_content = analysis.get('file_processing_result', {}).get('content', {})
-        ocr_text = file_content.get('ocr', {}).get('text', '') if isinstance(file_content.get('ocr'), dict) else file_content.get('text', '')
+        if isinstance(file_content.get('ocr'), dict):
+            ocr_text = file_content.get('ocr', {}).get('text', '')
+        
+        # パス2: file_processing_result.content.text（旧形式）
+        if not ocr_text:
+            ocr_text = file_content.get('text', '')
+        
+        # パス3: file_processing_result.ocr_text（別の形式）
+        if not ocr_text:
+            ocr_text = analysis.get('file_processing_result', {}).get('ocr_text', '')
+        
+        # パス4: complete_metadata.ocr（別の保存場所）
+        if not ocr_text:
+            metadata = evidence.get('complete_metadata', {})
+            ocr_text = metadata.get('ocr_text', '')
+        
         extended['OCRテキスト'] = ocr_text
         
         # 品質スコア
@@ -2216,28 +2243,37 @@ class Phase1MultiRunner:
                     
                     summary = export_data['complete_description'] or ''
                     
-                    row_data = {
-                        '証拠種別': type_name,
-                        'ステータス': status,
-                        '証拠番号': evidence_id,
-                        '仮番号': temp_id,
-                        '作成日': export_data['creation_date'],
-                        '分析状態': analysis_status,
-                        'ファイル名': export_data['file_name'],
-                        '文書種別': export_data['document_type'],
-                        '作成者': export_data['author'],
-                        '宛先': export_data['recipient'],
-                        '要約': summary[:100] + '...' if len(summary) > 100 else summary,
-                        'Google DriveファイルID': gdrive_file_id
-                    }
-                    
                     # 拡張モードの場合、自然言語フィールドを個別列に展開
                     if extended_mode:
+                        # 拡張モード専用の基本情報
+                        row_data = {
+                            '証拠種別': type_name,
+                            'ステータス': status,
+                            '証拠番号': evidence_id,
+                            '仮番号': temp_id,
+                            '分析状態': analysis_status,
+                            'Google DriveファイルID': gdrive_file_id
+                        }
+                        # 拡張フィールドを追加
                         extended_data = self._extract_extended_fields(evidence)
                         row_data.update(extended_data)
                     
-                    # 全データモードの場合、JSON列を追加
+                    # 全データモードの場合、標準フィールド + JSON列
                     elif full_data:
+                        row_data = {
+                            '証拠種別': type_name,
+                            'ステータス': status,
+                            '証拠番号': evidence_id,
+                            '仮番号': temp_id,
+                            '作成日': export_data['creation_date'],
+                            '分析状態': analysis_status,
+                            'ファイル名': export_data['file_name'],
+                            '文書種別': export_data['document_type'],
+                            '作成者': export_data['author'],
+                            '宛先': export_data['recipient'],
+                            '要約': summary[:100] + '...' if len(summary) > 100 else summary,
+                            'Google DriveファイルID': gdrive_file_id
+                        }
                         # complete_metadataをJSON文字列として出力
                         complete_metadata = evidence.get('complete_metadata', {})
                         row_data['complete_metadata_json'] = json.dumps(complete_metadata, ensure_ascii=False) if complete_metadata else ''
@@ -2245,6 +2281,23 @@ class Phase1MultiRunner:
                         # phase1_complete_analysisをJSON文字列として出力
                         phase1_analysis = evidence.get('phase1_complete_analysis', {})
                         row_data['phase1_complete_analysis_json'] = json.dumps(phase1_analysis, ensure_ascii=False) if phase1_analysis else ''
+                    
+                    # 標準モード
+                    else:
+                        row_data = {
+                            '証拠種別': type_name,
+                            'ステータス': status,
+                            '証拠番号': evidence_id,
+                            '仮番号': temp_id,
+                            '作成日': export_data['creation_date'],
+                            '分析状態': analysis_status,
+                            'ファイル名': export_data['file_name'],
+                            '文書種別': export_data['document_type'],
+                            '作成者': export_data['author'],
+                            '宛先': export_data['recipient'],
+                            '要約': summary[:100] + '...' if len(summary) > 100 else summary,
+                            'Google DriveファイルID': gdrive_file_id
+                        }
                     
                     writer.writerow(row_data)
             
