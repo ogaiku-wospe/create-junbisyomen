@@ -318,11 +318,12 @@ class TimelineBuilder:
         """証拠から日付を抽出
         
         優先順位:
-        1. complete_metadata.format_specific.document_date
-        2. complete_metadata.format_specific.exif_data.DateTime*
-        3. complete_metadata.basic.created_time
-        4. ai_analysis.evidence_metadata.creation_date
-        5. ai_analysis.related_facts.timeline の最初の日付
+        1. ai_analysis.objective_analysis.temporal_information.document_date (CSV編集で更新される)
+        2. complete_metadata.format_specific.document_date
+        3. complete_metadata.format_specific.exif_data.DateTime*
+        4. complete_metadata.basic.created_time
+        5. ai_analysis.evidence_metadata.creation_date
+        6. ai_analysis.related_facts.timeline の最初の日付
         
         Returns:
             日付文字列（YYYY-MM-DD, YYYY-MM, YYYYのいずれか）またはNone
@@ -330,8 +331,18 @@ class TimelineBuilder:
         try:
             # Phase1分析データから取得
             phase1_analysis = evidence.get('phase1_complete_analysis', {})
+            ai_analysis = phase1_analysis.get('ai_analysis', {})
             
-            # 1. complete_metadataから文書日付を取得
+            # 1. AI分析のobjective_analysis.temporal_informationから取得（最優先: CSV編集で更新）
+            objective_analysis = ai_analysis.get('objective_analysis', {})
+            temporal_info = objective_analysis.get('temporal_information', {})
+            if 'document_date' in temporal_info:
+                date_str = temporal_info['document_date']
+                parsed_date = self._parse_date(date_str)
+                if parsed_date:
+                    return parsed_date
+            
+            # 2. complete_metadataから文書日付を取得
             complete_metadata = evidence.get('complete_metadata', {})
             format_specific = complete_metadata.get('format_specific', {})
             
@@ -341,7 +352,7 @@ class TimelineBuilder:
                 if parsed_date:
                     return parsed_date
             
-            # 2. EXIF情報から取得
+            # 3. EXIF情報から取得
             exif_data = format_specific.get('exif_data', {})
             for key in ['DateTime', 'DateTimeOriginal', 'DateTimeDigitized']:
                 if key in exif_data:
@@ -350,7 +361,7 @@ class TimelineBuilder:
                     if parsed_date:
                         return parsed_date
             
-            # 3. ファイル作成日時から取得
+            # 4. ファイル作成日時から取得
             basic_metadata = complete_metadata.get('basic', {})
             if 'created_time' in basic_metadata:
                 date_str = basic_metadata['created_time']
@@ -358,8 +369,7 @@ class TimelineBuilder:
                 if parsed_date:
                     return parsed_date
             
-            # 4. AI分析のevidence_metadataから取得
-            ai_analysis = phase1_analysis.get('ai_analysis', {})
+            # 5. AI分析のevidence_metadataから取得
             evidence_metadata = ai_analysis.get('evidence_metadata', {})
             if 'creation_date' in evidence_metadata:
                 date_str = evidence_metadata['creation_date']
@@ -367,7 +377,7 @@ class TimelineBuilder:
                 if parsed_date:
                     return parsed_date
             
-            # 5. related_factsのtimelineから取得
+            # 6. related_factsのtimelineから取得
             related_facts = ai_analysis.get('related_facts', {})
             timeline = related_facts.get('timeline', [])
             if timeline and len(timeline) > 0:

@@ -2739,11 +2739,25 @@ class Phase1MultiRunner:
                         csv_value = row.get(field, '').strip()
                         current_value = str(current_extended.get(field, '')).strip()
                         
-                        # 値が変更されている場合
+                        # 値が変更されている場合（型変換のみの変更は無視）
                         if csv_value != current_value:
-                            changes[field] = (current_value[:50] + '...' if len(current_value) > 50 else current_value,
-                                            csv_value[:50] + '...' if len(csv_value) > 50 else csv_value)
-                            csv_extended_data[field] = csv_value
+                            # 数値型変換のみの変更を無視（例: 2 → 2.0）
+                            is_numeric_conversion_only = False
+                            try:
+                                # 両方が数値に変換可能で、値が等しい場合は型変換のみとみなす
+                                if csv_value and current_value:
+                                    csv_num = float(csv_value)
+                                    current_num = float(current_value)
+                                    if csv_num == current_num:
+                                        is_numeric_conversion_only = True
+                            except (ValueError, TypeError):
+                                pass
+                            
+                            # 型変換のみの変更でなければ、変更として記録
+                            if not is_numeric_conversion_only:
+                                changes[field] = (current_value[:50] + '...' if len(current_value) > 50 else current_value,
+                                                csv_value[:50] + '...' if len(csv_value) > 50 else csv_value)
+                                csv_extended_data[field] = csv_value
                     
                     if csv_extended_data:
                         csv_update_data['extended_fields'] = csv_extended_data
