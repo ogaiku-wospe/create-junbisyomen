@@ -853,9 +853,6 @@ class TimelineBuilder:
                 "key_facts": []
             }
         
-        print("\n🤖 Claude AI による客観的ストーリー生成を開始します...")
-        print("   （高品質な分析のため、数十秒かかる場合があります）")
-        
         # タイムラインイベントを JSON 形式に変換
         timeline_data = [event.to_dict() for event in timeline_events]
         
