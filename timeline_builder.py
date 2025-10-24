@@ -415,6 +415,11 @@ class TimelineBuilder:
         if iso_match:
             return f"{iso_match.group(1)}-{iso_match.group(2)}-{iso_match.group(3)}"
         
+        # スペース区切りのタイムスタンプ形式（YYYY-MM-DD HH:MM:SS...）
+        space_timestamp_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})\s', date_str)
+        if space_timestamp_match:
+            return f"{space_timestamp_match.group(1)}-{space_timestamp_match.group(2)}-{space_timestamp_match.group(3)}"
+        
         # EXIF形式（YYYY:MM:DD HH:MM:SS）
         exif_match = re.match(r'^(\d{4}):(\d{2}):(\d{2})', date_str)
         if exif_match:
