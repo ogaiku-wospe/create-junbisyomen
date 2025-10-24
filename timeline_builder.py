@@ -906,6 +906,23 @@ class TimelineBuilder:
         # プロンプトを作成
         prompt = self._create_enhanced_narrative_prompt(timeline_data)
         
+        # デバッグ: プロンプトの一部を出力
+        print("\n" + "="*80)
+        print("【デバッグ】AIに送信するプロンプトの最初の3証拠:")
+        print("="*80)
+        lines = prompt.split('\n')
+        evidence_count = 0
+        for i, line in enumerate(lines):
+            if line.startswith('【日付表示】'):
+                evidence_count += 1
+                if evidence_count <= 3:
+                    # この証拠の情報を10行表示
+                    print('\n'.join(lines[i:min(i+10, len(lines))]))
+                    print("...")
+                if evidence_count >= 3:
+                    break
+        print("="*80 + "\n")
+        
         try:
             # Claude API を呼び出し
             response = self.anthropic_client.messages.create(
