@@ -501,6 +501,48 @@ class TimelineBuilder:
             print(f"⚠️ 証拠 {evidence.get('evidence_id', '不明')} の説明抽出に失敗: {e}")
             return "説明情報を取得できませんでした"
     
+    def _clean_temporal_references(self, text: str) -> str:
+        """証拠説明文から時間的な混乱を招く表現を除去
+        
+        Args:
+            text: 元のテキスト
+        
+        Returns:
+            クリーニングされたテキスト
+        """
+        if not text:
+            return text
+        
+        try:
+            # 除去するフレーズのパターン
+            temporal_patterns = [
+                # スクリーンショット撮影日/記録日の記載
+                r'スクリーンショット撮影日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'記録日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'取得日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'撮影日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'キャプチャ日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                # 「～に記録された」「～に撮影された」等の表現
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?に記録された?',
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?に撮影された?',
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?に取得された?',
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?にキャプチャされた?',
+            ]
+            
+            cleaned = text
+            for pattern in temporal_patterns:
+                cleaned = re.sub(pattern, '', cleaned)
+            
+            # 余分な空白や改行を整理
+            cleaned = re.sub(r'\n\s*\n', '\n', cleaned)  # 連続する空行を1つに
+            cleaned = re.sub(r'  +', ' ', cleaned)  # 連続するスペースを1つに
+            
+            return cleaned.strip()
+            
+        except Exception as e:
+            print(f"⚠️ テキストクリーニングに失敗: {e}")
+            return text
+    
     def extract_related_facts_from_evidence(self, evidence: Dict) -> List[Dict]:
         """証拠からrelated_facts情報を抽出
         
@@ -865,7 +907,7 @@ class TimelineBuilder:
                 model="claude-sonnet-4-20250514",
                 max_tokens=8000,
                 temperature=0.3,
-                system="あなたは法律文書の専門家です。提供された証拠の時系列情報から、完全に客観的で中立的なストーリーを生成してください。法的判断や主観的評価は一切含めず、証拠から得られる事実のみを時系列順に記述してください。また、各事実がどの証拠によって裏付けられているかを明確に示してください。\n\n【日付に関する厳格なルール】各証拠の日付は、証拠情報の【日付表示】欄に記載されたものを必ず正確に使用してください。証拠の内容（文書内に記載された日付）から日付を推測したり変更したりしてはいけません。【日付表示】欄の日付が唯一の正しい日付です。スクリーンショット・ウェブページ・SNS投稿の場合も、撮影日や記録日ではなく【日付表示】欄の日付（元の投稿日・作成日）を使用してください。",
+                system="あなたは法律文書の専門家です。提供された証拠の時系列情報から、完全に客観的で中立的なストーリーを生成してください。法的判断や主観的評価は一切含めず、証拠から得られる事実のみを時系列順に記述してください。また、各事実がどの証拠によって裏付けられているかを明確に示してください。\n\n【重要】各証拠の【日付表示】欄に記載された日付が、その証拠の正確な日付です。ストーリー生成時は、必ずこの【日付表示】欄の日付をそのまま使用してください。",
                 messages=[
                     {
                         "role": "user",
@@ -979,15 +1021,11 @@ class TimelineBuilder:
         prompt_parts.append("6. 読みやすい日本語の文章形式")
         prompt_parts.append("7. **重要**: 各事実がどの証拠によって裏付けられているかを明確に示す")
         prompt_parts.append("8. **重要**: 依頼者からの包括的情報を考慮し、全体の文脈を適切に反映する")
-        prompt_parts.append("9. **🚨 極めて重要**: 各証拠の日付は【日付表示】欄に記載されたものを正確に使用すること")
-        prompt_parts.append("   - 証拠内容（文書に記載された日付）から日付を推測・変更してはならない")
-        prompt_parts.append("   - 必ず【日付表示】欄の日付を使用し、それ以外の日付を使用してはならない")
-        prompt_parts.append("   - 文書内に異なる日付が記載されていても、【日付表示】欄の日付が正しい作成日である")
-        prompt_parts.append("   - スクリーンショット、ウェブページ、SNS投稿の記録も【日付表示】欄の日付を使用する")
-        prompt_parts.append("   - 「記録された」「取得された」「スクリーンショット撮影日」は無視し、【日付表示】欄のみを使用\n")
+        prompt_parts.append("9. **🚨 極めて重要**: 各証拠の【日付表示】欄に記載された日付のみを使用すること\n")
         prompt_parts.append("【証拠情報】\n")
         
         # タイムラインデータを整形（詳細情報を含む）
+        # 重要: AIに送る前に、混乱を招く時間情報を除外する
         for event in timeline_data:
             date_display = event.get('date_display', '日付不明')
             evidence_number = event.get('evidence_number', '不明')
@@ -998,22 +1036,29 @@ class TimelineBuilder:
             legal_significance = event.get('legal_significance', {})
             temporal_context = event.get('temporal_context')
             
-            prompt_parts.append(f"\n【{date_display}】 ({evidence_number} / ID: {evidence_id})")
-            prompt_parts.append(f"情報源: {source_type}")
-            prompt_parts.append(f"\n{description}")
+            # 説明文から時間的な混乱を招く表現を除去
+            cleaned_description = self._clean_temporal_references(description)
             
-            # related_factsを追加
+            prompt_parts.append(f"\n【日付表示】: {date_display}")
+            prompt_parts.append(f"【証拠番号】: {evidence_number}")
+            prompt_parts.append(f"【証拠ID】: {evidence_id}")
+            prompt_parts.append(f"【情報源】: {source_type}")
+            prompt_parts.append(f"【内容】: {cleaned_description}")
+            
+            # related_factsを追加（時間的表現をクリーニング）
             if related_facts:
                 prompt_parts.append("\n【関連する事実】")
                 for fact in related_facts:
                     fact_type = fact.get('type', '不明')
                     fact_content = fact.get('content', '')
-                    prompt_parts.append(f"  - [{fact_type}] {fact_content}")
+                    cleaned_fact = self._clean_temporal_references(fact_content)
+                    prompt_parts.append(f"  - [{fact_type}] {cleaned_fact}")
             
-            # temporal_contextを追加
+            # temporal_contextを追加（時間的表現をクリーニング）
             if temporal_context:
+                cleaned_context = self._clean_temporal_references(temporal_context)
                 prompt_parts.append(f"\n【時系列的な文脈】")
-                prompt_parts.append(f"  {temporal_context}")
+                prompt_parts.append(f"  {cleaned_context}")
             
             # legal_significanceを追加（重要な場合のみ）
             if legal_significance and legal_significance.get('key_legal_points'):
@@ -1054,16 +1099,7 @@ class TimelineBuilder:
         prompt_parts.append("- 各事実には、それを裏付ける証拠のIDと証拠番号を明記")
         prompt_parts.append("- confidenceは、その事実の確実性（high/medium/low）")
         prompt_parts.append("- key_factsには、特に重要な事実のみを抽出")
-        prompt_parts.append("")
-        prompt_parts.append("**🚨 日付に関する厳格なルール**:")
-        prompt_parts.append("- 出力する日付は必ず上記【証拠情報】の【日付表示】欄に記載されたものを使用")
-        prompt_parts.append("- 証拠の内容から日付を推測したり、変更したりしてはならない")
-        prompt_parts.append("- 例: 【2022-12-13頃】と表示されている場合 → 出力も「2022-12-13」を使用")
-        prompt_parts.append("- 文書内に「令和7年」「2025年」等の記載があっても、【日付表示】欄の日付が正しい")
-        prompt_parts.append("- **重要**: スクリーンショット、ウェブページ、SNS投稿の場合:")
-        prompt_parts.append("  - 撮影日・記録日・取得日は無視する")
-        prompt_parts.append("  - 【日付表示】欄の日付が元の投稿日・作成日を示している")
-        prompt_parts.append("  - 例: ツイートのスクリーンショット → 【日付表示】がツイート投稿日")
+        prompt_parts.append("- **日付は【証拠情報】の【日付表示】欄に記載されたものをそのまま使用すること**")
         
         return "\n".join(prompt_parts)
     
