@@ -175,12 +175,29 @@ class AIAnalyzerComplete:
             actual_file_path = file_content.get('processed_file_path', file_path)
             vision_result = self._analyze_with_vision(actual_file_path, analysis_prompt, file_type)
             
-            # Vision APIがコンテンツポリシーで拒否した場合、テキストベース分析にフォールバック
-            if vision_result is None:
+            # Vision APIがコンテンツポリシーで拒否されたかチェック
+            # Noneまたはanalysis_status='content_policy_rejected'の場合
+            is_rejected = (vision_result is None) or \
+                         (isinstance(vision_result, dict) and 
+                          vision_result.get('analysis_status') == 'content_policy_rejected')
+            
+            if is_rejected:
                 analysis_method_info["vision_api_success"] = False
                 analysis_method_info["rejection_reason"] = "content_policy_rejection"
-                analysis_method_info["ocr_fallback_used"] = True
                 
+                # すでにClaudeフォールバックが試行されている場合
+                if isinstance(vision_result, dict) and 'analysis_status' in vision_result:
+                    logger.warning("⚠️ OpenAI/Claude両方でコンテンツポリシー拒否されました")
+                    logger.warning("   デフォルト値を返します（手動確認が必要）")
+                    
+                    # 分析メソッド情報を追加
+                    vision_result['_analysis_method'] = analysis_method_info
+                    vision_result['_analysis_method']['all_ai_rejected'] = True
+                    
+                    return vision_result
+                
+                # OCRテキストベース分析にフォールバック
+                analysis_method_info["ocr_fallback_used"] = True
                 logger.info("📝 OCRテキストを使用してテキストベース分析を実行")
                 
                 # OCR品質をチェック
@@ -201,6 +218,7 @@ class AIAnalyzerComplete:
                 
                 return result
             else:
+                # Vision API成功
                 analysis_method_info["vision_api_success"] = True
                 analysis_method_info["successful_method"] = "vision_api"
                 
@@ -423,27 +441,40 @@ class AIAnalyzerComplete:
         return '\n'.join(summary_parts)
     
     def _analyze_with_vision(self, file_path: str, prompt: str, file_type: str, retry_count: int = 0, track_retry: bool = True) -> Dict:
-        """Vision APIで分析（リトライ機構付き）"""
+        """Vision APIで分析（複数ページPDF対応、リトライ機構付き）"""
         try:
-            # ファイルタイプに応じた処理
+            # 画像パスを決定（複数ページ対応）
+            image_paths = []
+            
             if file_type == 'image':
-                image_path = file_path
+                image_paths = [file_path]
             elif file_type in ['pdf', 'document']:
-                # PDFまたはWord文書の最初のページを画像化
-                image_path = self._pdf_first_page_to_image(file_path)
+                # PDFまたはWord文書を全ページ画像化（最大10ページ）
+                image_paths = self._pdf_to_images(file_path, first_page_only=False, max_pages=10)
                 
                 # PDF変換失敗時はテキスト解析にフォールバック
-                if image_path is None:
+                if not image_paths:
                     logger.warning(f"{file_type}→画像変換失敗、テキスト解析にフォールバック")
                     return self._analyze_with_text(prompt, {'file_path': file_path})
+                
+                logger.info(f"📄 PDF全ページ分析: {len(image_paths)}ページ")
             else:
-                image_path = file_path
+                image_paths = [file_path]
             
-            # Base64エンコード
-            with open(image_path, 'rb') as f:
-                image_data = base64.b64encode(f.read()).decode('utf-8')
-            
-            mime_type = self._get_mime_type(image_path)
+            # 複数画像をBase64エンコード
+            image_contents = []
+            for i, image_path in enumerate(image_paths, 1):
+                with open(image_path, 'rb') as f:
+                    image_data = base64.b64encode(f.read()).decode('utf-8')
+                
+                mime_type = self._get_mime_type(image_path)
+                image_contents.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{image_data}",
+                        "detail": "high"
+                    }
+                })
             
             # 常に法律文書であることを明示（コンテンツポリシー誤検出を防ぐ）
             context_prefix = """
@@ -462,25 +493,33 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             if retry_count > 0:
                 logger.info(f"🔄 リトライ {retry_count}回目: 法律文書コンテキストを追加")
             
+            if len(image_paths) > 1:
+                context_prefix += f"""
+CRITICAL INSTRUCTION FOR MULTI-PAGE DOCUMENT:
+- This document contains {len(image_paths)} pages in total
+- You MUST analyze and extract information from ALL {len(image_paths)} pages
+- When extracting OCR text, combine text from ALL pages sequentially
+- When describing the document, include information from ALL pages
+- Do NOT focus only on the first page - ensure complete coverage of all pages
+
+"""
+            
+            # メッセージコンテンツを構築（テキスト + 全画像）
+            message_content = [
+                {
+                    "type": "text",
+                    "text": context_prefix + prompt
+                }
+            ]
+            message_content.extend(image_contents)
+            
             # GPT-4o Vision API呼び出し
             response = self.client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": context_prefix + prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{image_data}",
-                                    "detail": "high"
-                                }
-                            }
-                        ]
+                        "content": message_content
                     }
                 ],
                 max_tokens=OPENAI_MAX_TOKENS,
@@ -495,33 +534,83 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                 logger.debug(f"API応答プレビュー: {result[:200]}...")
             
             # OpenAIのコンテンツポリシー拒否チェック
-            # Vision APIが拒否した場合、Claude → OCRの順でフォールバック
+            # Vision APIが拒否した場合、Claude Vision → Claude Text → デフォルト値の順でフォールバック
             # 拒否メッセージの特徴:
-            # 1. 非常に短い（通常100文字未満）
+            # 1. 非常に短い（通常200文字未満）
             # 2. JSON形式ではない
-            # 3. "I'm sorry, I can't assist with that"という完全一致
+            # 3. "I'm sorry, I can't assist with that"などの定型文
+            # 4. "I'm unable to assist"などのバリエーション
             if result and len(result) < 200 and "```" not in result and "{" not in result:
-                if "I'm sorry, I can't assist with that" in result or \
-                   "I cannot assist with that request" in result or \
-                   (result.startswith("I'm sorry") and "assist" in result):
-                    
+                rejection_phrases = [
+                    "I'm sorry, I can't assist with that",
+                    "I cannot assist with that request",
+                    "I'm unable to assist with this request",
+                    "I can't help with that"
+                ]
+                
+                is_rejected = any(phrase in result for phrase in rejection_phrases) or \
+                              (result.startswith("I'm sorry") and "assist" in result) or \
+                              (result.startswith("I'm unable") and "assist" in result) or \
+                              (result.startswith("I cannot") and "assist" in result)
+                
+                if is_rejected:
                     logger.warning(f"⚠️ OpenAI Vision API: コンテンツポリシーで拒否されました")
                     logger.warning(f"   拒否メッセージ: {result}")
                     
-                    # Claude Vision APIにフォールバック
-                    if self.anthropic_client:
-                        logger.info("🔄 Anthropic Claude Vision APIにフォールバックします")
+                    # Claude Vision APIにフォールバック（全ページ送信）
+                    if self.anthropic_client and len(image_paths) > 0:
+                        page_info = f"全{len(image_paths)}ページ" if len(image_paths) > 1 else "1ページ"
+                        logger.info(f"🔄 Anthropic Claude Vision APIにフォールバックします（{page_info}）")
                         try:
-                            claude_result = self._analyze_with_claude(image_path, prompt)
+                            # 複数ページの場合はプロンプトに注記を追加
+                            claude_prompt = prompt
+                            if len(image_paths) > 1:
+                                claude_prompt = f"""CRITICAL: This document has {len(image_paths)} pages.
+You MUST analyze ALL {len(image_paths)} pages and extract information from every page.
+Combine OCR text from all pages sequentially.
+
+{prompt}"""
+                            
+                            claude_result = self._analyze_with_claude_multi_page(image_paths, claude_prompt)
                             if claude_result:
                                 logger.info("✅ Claude Vision APIで分析成功")
                                 return claude_result
                         except Exception as e:
                             logger.warning(f"⚠️ Claude Vision API失敗: {e}")
                     
-                    # OCRテキストベース分析にフォールバック
-                    logger.info("📝 OCRテキストベース分析にフォールバックします")
-                    return None  # Noneを返してフォールバック処理を促す
+                    # Claude Text APIにフォールバック（テキストベース分析）
+                    if self.anthropic_client:
+                        logger.info("🔄 Claude Text APIにフォールバックします（テキストベース分析）")
+                        try:
+                            # ファイルパスと画像情報を渡す
+                            file_info = {
+                                'file_path': file_path,
+                                'file_type': file_type,
+                                'page_count': len(image_paths),
+                                'note': '画像からテキスト抽出が必要な文書'
+                            }
+                            claude_text_result = self._analyze_with_claude_text(prompt, file_info)
+                            if claude_text_result:
+                                logger.info("✅ Claude Text APIで分析成功")
+                                return claude_text_result
+                        except Exception as e:
+                            logger.warning(f"⚠️ Claude Text API失敗: {e}")
+                    
+                    # すべてのフォールバックが失敗した場合、デフォルト値を返す
+                    logger.error("❌ すべてのAI APIで分析失敗、デフォルト値を返します")
+                    return {
+                        "evidence_metadata": {},
+                        "full_content": {
+                            "error": "AIコンテンツポリシーにより分析できませんでした",
+                            "suggestion": "ファイルを直接確認してください"
+                        },
+                        "legal_significance": {},
+                        "related_facts": {},
+                        "usage_suggestions": {},
+                        "verbalization_level": 0,
+                        "confidence_score": 0.0,
+                        "analysis_status": "content_policy_rejected"
+                    }
             
             parsed_result = self._parse_ai_response(result)
             
@@ -534,6 +623,76 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
         except Exception as e:
             logger.error(f"❌ Vision API分析失敗: {e}")
             raise
+    
+    def _analyze_with_claude_text(self, prompt: str, file_content: Dict) -> Optional[Dict]:
+        """Anthropic Claude Text APIで分析（テキストのみ）
+        
+        Args:
+            prompt: 分析プロンプト
+            file_content: ファイル内容
+            
+        Returns:
+            分析結果（失敗時はNone）
+        """
+        try:
+            if not self.anthropic_client:
+                return None
+            
+            # ファイル内容をプロンプトに追加
+            content_text = json.dumps(file_content, ensure_ascii=False, indent=2)
+            full_prompt = f"{prompt}\n\n【ファイル内容詳細】\n{content_text}"
+            
+            # Claude Text API呼び出し（多段階フォールバック対応）
+            models_to_try = [
+                ("Claude Sonnet 4.x (最高品質)", ANTHROPIC_MODEL),
+                ("Claude Sonnet 3.7 (高品質)", ANTHROPIC_MODEL_FALLBACK_1),
+                ("Claude Haiku 4.x (高速)", ANTHROPIC_MODEL_FALLBACK_2)
+            ]
+            
+            message = None
+            model = None
+            last_error = None
+            
+            for model_name, model_to_use in models_to_try:
+                try:
+                    logger.info(f"🤖 {model_name}を試行中...")
+                    
+                    message = self.anthropic_client.messages.create(
+                        model=model_to_use,
+                        max_tokens=ANTHROPIC_MAX_TOKENS,
+                        temperature=ANTHROPIC_TEMPERATURE,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": full_prompt
+                            }
+                        ]
+                    )
+                    
+                    model = model_to_use
+                    logger.info(f"✅ {model_name}で分析成功")
+                    break
+                    
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"⚠️ {model_name}失敗: {e}")
+                    continue
+            
+            if message is None:
+                logger.error(f"❌ すべてのClaudeモデルで失敗: {last_error}")
+                return None
+            
+            # レスポンステキスト取得
+            result_text = message.content[0].text
+            
+            logger.info(f"✅ Claude Text API分析完了 (モデル: {model})")
+            logger.debug(f"Claude応答長: {len(result_text)}文字")
+            
+            return self._parse_ai_response(result_text)
+            
+        except Exception as e:
+            logger.error(f"❌ Claude Text API分析失敗: {e}")
+            return None
     
     def _analyze_with_claude(self, image_path: str, prompt: str) -> Optional[Dict]:
         """Anthropic Claude Vision APIで分析
@@ -665,12 +824,155 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             logger.error(f"❌ Claude Vision API分析失敗: {e}")
             return None
     
+    def _analyze_with_claude_multi_page(self, image_paths: List[str], prompt: str) -> Optional[Dict]:
+        """Anthropic Claude Vision APIで複数ページ分析
+        
+        Args:
+            image_paths: 画像ファイルパスのリスト
+            prompt: 分析プロンプト
+            
+        Returns:
+            分析結果（失敗時はNone）
+        """
+        try:
+            if not self.anthropic_client:
+                return None
+            
+            # 複数画像をBase64エンコード
+            message_content = []
+            
+            # 各ページの画像を追加
+            for i, image_path in enumerate(image_paths, 1):
+                with open(image_path, 'rb') as f:
+                    image_data = base64.b64encode(f.read()).decode('utf-8')
+                
+                mime_type = self._get_mime_type(image_path)
+                
+                message_content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime_type,
+                        "data": image_data,
+                    },
+                })
+            
+            # プロンプトを最後に追加
+            message_content.append({
+                "type": "text",
+                "text": f"""IMPORTANT: This is a legal evidence document submitted in civil litigation proceedings.
+
+CONTEXT:
+- This image is documentary evidence for legal proceedings
+- Contains factual records such as photos, screenshots, documents, or correspondence
+- Required for objective legal analysis and court procedures
+- Educational and professional analysis purpose only
+
+TASK: Analyze this evidence objectively and professionally for legal documentation purposes.
+
+{prompt}"""
+            })
+            
+            # Claude Vision API呼び出し（多段階フォールバック対応）
+            models_to_try = [
+                ("Claude Sonnet 4.x (最高品質)", ANTHROPIC_MODEL),
+                ("Claude Sonnet 3.7 (高品質)", ANTHROPIC_MODEL_FALLBACK_1),
+                ("Claude Haiku 4.x (高速)", ANTHROPIC_MODEL_FALLBACK_2)
+            ]
+            
+            message = None
+            model = None
+            last_error = None
+            
+            # 各モデルを順番に試行
+            for model_name, model_id in models_to_try:
+                try:
+                    logger.info(f"🔄 {model_name} で分析を試行中（{len(image_paths)}ページ）...")
+                    model = model_id
+                    message = self.anthropic_client.messages.create(
+                        model=model,
+                        max_tokens=ANTHROPIC_MAX_TOKENS,
+                        temperature=ANTHROPIC_TEMPERATURE,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": message_content,
+                            }
+                        ],
+                    )
+                    logger.info(f"✅ {model_name} で分析成功")
+                    break  # 成功したらループ終了
+                    
+                except Exception as model_error:
+                    last_error = model_error
+                    if "404" in str(model_error) or "not_found" in str(model_error):
+                        logger.warning(f"⚠️ {model_name} ({model}) が利用不可: {model_error}")
+                        continue
+                    elif "overloaded" in str(model_error).lower():
+                        logger.warning(f"⚠️ {model_name} が過負荷状態: {model_error}")
+                        continue
+                    else:
+                        logger.error(f"❌ {model_name} でエラー: {model_error}")
+                        raise
+            
+            # すべてのモデルで失敗した場合
+            if message is None:
+                logger.error(f"❌ すべてのClaudeモデルで分析失敗")
+                if last_error:
+                    raise last_error
+                else:
+                    raise Exception("すべてのClaudeモデルが利用不可です")
+            
+            # レスポンスからテキストを抽出
+            result = message.content[0].text
+            logger.debug(f"Claude API応答: {len(result)}文字")
+            
+            # モデル世代を判定
+            if "sonnet-4" in model:
+                model_family = "Claude Sonnet 4.x (最高品質)"
+            elif "sonnet-3-7" in model:
+                model_family = "Claude Sonnet 3.7 (高品質)"
+            elif "haiku-4" in model:
+                model_family = "Claude Haiku 4.x (高速)"
+            else:
+                model_family = "Claude"
+            
+            logger.info(f"✅ 使用モデル: {model_family} ({model})")
+            
+            # JSON解析
+            parsed_result = self._parse_ai_response(result)
+            
+            # AI分析エンジン情報を記録
+            if isinstance(parsed_result, dict):
+                parsed_result['_ai_engine'] = f'{model_family} ({model})'
+            
+            return parsed_result
+            
+        except Exception as e:
+            logger.error(f"❌ Claude Vision API（複数ページ）分析失敗: {e}")
+            return None
+    
     def _analyze_with_text(self, prompt: str, file_content: Dict) -> Dict:
-        """テキストベース分析"""
+        """テキストベース分析（コンテンツポリシー拒否対応）"""
         try:
             # ファイル内容をプロンプトに追加
             content_text = json.dumps(file_content, ensure_ascii=False, indent=2)
-            full_prompt = f"{prompt}\n\n【ファイル内容詳細】\n{content_text}"
+            
+            # 法律文書コンテキストを追加
+            context_prefix = """
+IMPORTANT: This is a legal evidence document for civil litigation proceedings.
+
+CONTEXT:
+- This is documentary evidence for legal proceedings
+- Contains factual records and correspondence
+- Required for objective legal analysis
+- Educational and professional analysis purpose only
+- No harmful or inappropriate content intended
+
+TASK: Analyze this evidence objectively for legal documentation purposes.
+
+"""
+            full_prompt = f"{context_prefix}{prompt}\n\n【ファイル内容詳細】\n{content_text}"
             
             # GPT-4o API呼び出し
             response = self.client.chat.completions.create(
@@ -686,6 +988,36 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             )
             
             result = response.choices[0].message.content
+            
+            # コンテンツポリシー拒否チェック
+            if result and len(result) < 200 and "```" not in result and "{" not in result:
+                if "I'm sorry, I can't assist with that" in result or \
+                   "I cannot assist with that request" in result or \
+                   (result.startswith("I'm sorry") and "assist" in result):
+                    
+                    logger.warning(f"⚠️ OpenAI Text API: コンテンツポリシーで拒否されました")
+                    logger.warning(f"   拒否メッセージ: {result}")
+                    
+                    # Claude Text APIにフォールバック
+                    if self.anthropic_client:
+                        logger.info("🔄 Anthropic Claude Text APIにフォールバックします")
+                        try:
+                            claude_result = self._analyze_with_claude_text(prompt, file_content)
+                            if claude_result:
+                                logger.info("✅ Claude Text APIで分析成功")
+                                return claude_result
+                        except Exception as e:
+                            logger.warning(f"⚠️ Claude Text API失敗: {e}")
+                    
+                    # すべて失敗した場合は空の結果を返す
+                    logger.error("❌ すべてのAI分析が失敗しました")
+                    return {
+                        "raw_response": result,
+                        "rejection_reason": "content_policy_all_apis",
+                        "verbalization_level": 0,
+                        "error": "All AI APIs rejected due to content policy"
+                    }
+            
             return self._parse_ai_response(result)
             
         except Exception as e:
@@ -728,12 +1060,66 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                 }
             
             # JSON解析
-            result = json.loads(json_str)
-            return result
+            try:
+                result = json.loads(json_str)
+                return result
+            except json.JSONDecodeError as first_error:
+                # JSON修復を試みる
+                logger.warning(f"JSON解析エラー: {first_error}. 修復を試みます...")
+                
+                # 1. 末尾の不完全な文字列を修復
+                if "Unterminated string" in str(first_error):
+                    # 最後の引用符の位置を探す
+                    last_quote = json_str.rfind('"')
+                    if last_quote > 0:
+                        # 最後の引用符以降を切り捨て、適切に閉じる
+                        json_str_fixed = json_str[:last_quote + 1]
+                        
+                        # 開いている括弧をカウント
+                        open_braces = json_str_fixed.count('{') - json_str_fixed.count('}')
+                        open_brackets = json_str_fixed.count('[') - json_str_fixed.count(']')
+                        
+                        # 閉じていない括弧を閉じる
+                        json_str_fixed += '\n' + ']' * open_brackets + '\n' + '}' * open_braces
+                        
+                        try:
+                            result = json.loads(json_str_fixed)
+                            logger.info("✅ JSON修復成功")
+                            return result
+                        except:
+                            pass
+                
+                # 修復失敗時は元のエラーを再発生
+                raise first_error
             
         except json.JSONDecodeError as e:
             logger.error(f"エラー: JSON解析失敗 - {e}")
-            logger.warning(f"抽出したJSON文字列（最初の200文字）: {json_str[:200] if 'json_str' in locals() else 'N/A'}")
+            
+            # json_strが定義されているか確認
+            if 'json_str' in locals():
+                logger.warning(f"抽出したJSON文字列（最初の200文字）: {json_str[:200]}")
+                # 完全なJSON文字列をデバッグ出力（truncateして）
+                if len(json_str) > 2000:
+                    logger.debug(f"JSON文字列（先頭1000文字）: {json_str[:1000]}")
+                    logger.debug(f"JSON文字列（末尾1000文字）: {json_str[-1000:]}")
+                else:
+                    logger.debug(f"JSON文字列全体: {json_str}")
+            else:
+                logger.warning(f"抽出したJSON文字列: （変数未定義）")
+            
+            # コンテンツポリシー拒否メッセージの検出
+            rejection_phrases = [
+                "I'm sorry, I can't assist",
+                "I cannot assist",
+                "I'm unable to assist",
+                "I can't help with that"
+            ]
+            
+            is_rejected = any(phrase in response for phrase in rejection_phrases)
+            
+            if is_rejected:
+                logger.warning("⚠️ JSON解析失敗の原因: AIコンテンツポリシー拒否")
+                logger.warning(f"   拒否メッセージ: {response[:200]}")
             
             # デバッグモード時は全レスポンスを出力
             if debug_mode:
@@ -741,11 +1127,12 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             else:
                 logger.debug(f"Raw response (最初の500文字): {response[:500]}")
             
-            # フォールバック
+            # フォールバック（コンテンツポリシー拒否の場合は特別な値）
             return {
                 "raw_response": response,
                 "parse_error": str(e),
-                "verbalization_level": 0
+                "verbalization_level": 0,
+                "content_policy_rejected": is_rejected
             }
     
     def _structure_complete_result(self,
@@ -908,13 +1295,29 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
             return quality
     
     def _pdf_first_page_to_image(self, file_path: str) -> str:
-        """PDF/Word文書の最初のページを画像化
+        """PDF/Word文書の最初のページを画像化（後方互換性のため残す）
         
         Args:
             file_path: PDF/Wordファイルのパス
             
         Returns:
             変換後の画像ファイルパス、失敗時はNone
+        """
+        result = self._pdf_to_images(file_path, first_page_only=True)
+        if result and len(result) > 0:
+            return result[0]
+        return None
+    
+    def _pdf_to_images(self, file_path: str, first_page_only: bool = False, max_pages: int = 10) -> List[str]:
+        """PDF/Word文書を画像化（複数ページ対応）
+        
+        Args:
+            file_path: PDF/Wordファイルのパス
+            first_page_only: True の場合、最初のページのみ変換
+            max_pages: 変換する最大ページ数（デフォルト: 10）
+            
+        Returns:
+            変換後の画像ファイルパスのリスト、失敗時は空リスト
         """
         try:
             # ファイル拡張子を確認
@@ -943,7 +1346,7 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                     
                     if not os.path.exists(pdf_path):
                         logger.warning("Word→PDF変換に失敗しました")
-                        return None
+                        return []
                     
                     # PDFを使用して画像変換を続行
                     file_path = pdf_path
@@ -953,45 +1356,54 @@ TASK: Analyze this evidence objectively and professionally for legal documentati
                     logger.warning(f"Word→PDF変換失敗: {e}")
                     logger.warning("  LibreOfficeが未インストールの可能性があります")
                     logger.warning("  インストール: brew install libreoffice (Mac)")
-                    return None
+                    return []
             
             # PDFを画像に変換
             if file_ext == '.pdf':
                 from pdf2image import convert_from_path
                 
-                logger.info(f"PDF→画像変換開始: {os.path.basename(file_path)}")
-                
-                # PDFの1ページ目のみを画像に変換
-                images = convert_from_path(
-                    file_path, 
-                    first_page=1, 
-                    last_page=1,
-                    dpi=150  # 解像度（高すぎるとファイルサイズ大）
-                )
+                if first_page_only:
+                    logger.info(f"PDF→画像変換（1ページ目のみ）: {os.path.basename(file_path)}")
+                    images = convert_from_path(
+                        file_path, 
+                        first_page=1, 
+                        last_page=1,
+                        dpi=150  # 解像度（高すぎるとファイルサイズ大）
+                    )
+                else:
+                    logger.info(f"PDF→画像変換（全ページ、最大{max_pages}ページ）: {os.path.basename(file_path)}")
+                    images = convert_from_path(
+                        file_path, 
+                        dpi=150,  # 解像度
+                        last_page=max_pages  # 最大ページ数制限
+                    )
                 
                 if not images:
                     logger.warning("PDFから画像を抽出できませんでした")
-                    return None
+                    return []
                 
-                # 一時ファイルとして保存
-                temp_image_path = file_path.replace('.pdf', '_page1.jpg')
-                images[0].save(temp_image_path, 'JPEG', quality=85)
+                # 各ページを一時ファイルとして保存
+                image_paths = []
+                for i, image in enumerate(images, 1):
+                    temp_image_path = file_path.replace('.pdf', f'_page{i}.jpg')
+                    image.save(temp_image_path, 'JPEG', quality=85)
+                    image_paths.append(temp_image_path)
                 
-                logger.info(f"変換成功: {os.path.basename(temp_image_path)}")
-                return temp_image_path
+                logger.info(f"変換成功: {len(image_paths)}ページ")
+                return image_paths
             else:
                 logger.warning(f"サポートされていないファイル形式: {file_ext}")
-                return None
+                return []
             
         except ImportError:
             logger.error("エラー: pdf2imageライブラリが未インストール")
             logger.error("  インストール: pip install pdf2image")
             logger.error("  システム依存: brew install poppler (Mac)")
-            return None
+            return []
             
         except Exception as e:
             logger.error(f"文書変換エラー: {e}")
-            return None
+            return []
     
     def _get_mime_type(self, file_path: str) -> str:
         """MIMEタイプ取得"""
