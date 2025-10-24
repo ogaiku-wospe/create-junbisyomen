@@ -906,22 +906,7 @@ class TimelineBuilder:
         # プロンプトを作成
         prompt = self._create_enhanced_narrative_prompt(timeline_data)
         
-        # デバッグ: プロンプトの一部を出力
-        print("\n" + "="*80)
-        print("【デバッグ】AIに送信するプロンプトの最初の3証拠:")
-        print("="*80)
-        lines = prompt.split('\n')
-        evidence_count = 0
-        for i, line in enumerate(lines):
-            if line.startswith('【日付表示】'):
-                evidence_count += 1
-                if evidence_count <= 3:
-                    # この証拠の情報を10行表示
-                    print('\n'.join(lines[i:min(i+10, len(lines))]))
-                    print("...")
-                if evidence_count >= 3:
-                    break
-        print("="*80 + "\n")
+        # デバッグ出力は削除（不要な冗長出力を防ぐ）
         
         try:
             # Claude API を呼び出し
@@ -1776,13 +1761,19 @@ class TimelineBuilder:
             # 事件フォルダIDを取得
             case_folder_id = self.current_case.get('case_folder_id')
             if not case_folder_id:
-                print("⚠️ 事件フォルダIDが見つかりません。")
+                print("⚠️ 事件フォルダIDが見つかりません。Google Driveアップロードをスキップします。")
+                return None
+            
+            # フォルダIDの妥当性チェック
+            if not case_folder_id or len(case_folder_id) < 20:
+                print(f"⚠️ 事件フォルダIDが無効です: {case_folder_id}")
+                print("   Google Driveアップロードをスキップします。")
                 return None
             
             # timelineサブフォルダを探す or 作成
             timeline_folder_id = self._find_or_create_timeline_folder(service, case_folder_id)
             if not timeline_folder_id:
-                print("⚠️ timelineフォルダの作成に失敗しました。")
+                print("⚠️ timelineフォルダの作成に失敗しました。Google Driveアップロードをスキップします。")
                 return None
             
             # ファイルのMIMEタイプを判定
@@ -1853,7 +1844,13 @@ class TimelineBuilder:
             return folder.get('id')
             
         except Exception as e:
-            print(f"❌ timelineフォルダの作成に失敗しました: {e}")
+            # より詳細なエラーメッセージを表示
+            error_msg = str(e)
+            if "File not found" in error_msg or "404" in error_msg:
+                print(f"❌ 親フォルダが見つかりません（ID: {parent_folder_id}）")
+                print("   事件フォルダのIDが無効か、削除された可能性があります。")
+            else:
+                print(f"❌ timelineフォルダの作成に失敗しました: {e}")
             return None
     
     def _get_mime_type(self, file_name: str) -> str:
