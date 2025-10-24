@@ -1060,8 +1060,37 @@ TASK: Analyze this evidence objectively for legal documentation purposes.
                 }
             
             # JSON解析
-            result = json.loads(json_str)
-            return result
+            try:
+                result = json.loads(json_str)
+                return result
+            except json.JSONDecodeError as first_error:
+                # JSON修復を試みる
+                logger.warning(f"JSON解析エラー: {first_error}. 修復を試みます...")
+                
+                # 1. 末尾の不完全な文字列を修復
+                if "Unterminated string" in str(first_error):
+                    # 最後の引用符の位置を探す
+                    last_quote = json_str.rfind('"')
+                    if last_quote > 0:
+                        # 最後の引用符以降を切り捨て、適切に閉じる
+                        json_str_fixed = json_str[:last_quote + 1]
+                        
+                        # 開いている括弧をカウント
+                        open_braces = json_str_fixed.count('{') - json_str_fixed.count('}')
+                        open_brackets = json_str_fixed.count('[') - json_str_fixed.count(']')
+                        
+                        # 閉じていない括弧を閉じる
+                        json_str_fixed += '\n' + ']' * open_brackets + '\n' + '}' * open_braces
+                        
+                        try:
+                            result = json.loads(json_str_fixed)
+                            logger.info("✅ JSON修復成功")
+                            return result
+                        except:
+                            pass
+                
+                # 修復失敗時は元のエラーを再発生
+                raise first_error
             
         except json.JSONDecodeError as e:
             logger.error(f"エラー: JSON解析失敗 - {e}")
@@ -1069,6 +1098,12 @@ TASK: Analyze this evidence objectively for legal documentation purposes.
             # json_strが定義されているか確認
             if 'json_str' in locals():
                 logger.warning(f"抽出したJSON文字列（最初の200文字）: {json_str[:200]}")
+                # 完全なJSON文字列をデバッグ出力（truncateして）
+                if len(json_str) > 2000:
+                    logger.debug(f"JSON文字列（先頭1000文字）: {json_str[:1000]}")
+                    logger.debug(f"JSON文字列（末尾1000文字）: {json_str[-1000:]}")
+                else:
+                    logger.debug(f"JSON文字列全体: {json_str}")
             else:
                 logger.warning(f"抽出したJSON文字列: （変数未定義）")
             
