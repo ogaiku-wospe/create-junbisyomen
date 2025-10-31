@@ -258,7 +258,7 @@ def create_folder_structure(service, case_info, drive_settings):
     
     # 3. 乙号証フォルダを作成（オプション）
     if drive_settings.get('create_otsu'):
-        print(f"\n[3/3] 乙号証フォルダを作成中...")
+        print(f"\n[3/4] 乙号証フォルダを作成中...")
         otsu_folder_id = create_folder(
             service,
             "乙号証",
@@ -268,7 +268,22 @@ def create_folder_structure(service, case_info, drive_settings):
         folder_ids['otsu_evidence_folder_id'] = otsu_folder_id
     else:
         folder_ids['otsu_evidence_folder_id'] = None
-        print(f"\n[3/3] 乙号証フォルダはスキップしました")
+        print(f"\n[3/4] 乙号証フォルダはスキップしました")
+    
+    # 4. エクスポートファイル フォルダを作成
+    print(f"\n[4/4] エクスポートファイルフォルダを作成中...")
+    export_folder_id = create_folder(
+        service,
+        "エクスポートファイル",
+        case_folder_id,
+        is_shared
+    )
+    
+    if not export_folder_id:
+        print("\n⚠️  エクスポートファイルフォルダの作成に失敗しました（続行可能）")
+        folder_ids['export_folder_id'] = None
+    else:
+        folder_ids['export_folder_id'] = export_folder_id
     
     print("\n✅ すべてのフォルダが作成されました！\n")
     
@@ -297,6 +312,8 @@ def confirm_settings(case_info, drive_settings, folder_ids):
     print(f"  - 甲号証フォルダID: {folder_ids['ko_evidence_folder_id']}")
     if folder_ids.get('otsu_evidence_folder_id'):
         print(f"  - 乙号証フォルダID: {folder_ids['otsu_evidence_folder_id']}")
+    if folder_ids.get('export_folder_id'):
+        print(f"  - エクスポートファイルフォルダID: {folder_ids['export_folder_id']}")
     
     print("\n" + "="*70)
     
@@ -356,6 +373,7 @@ SHARED_DRIVE_ID = {f'"{shared_drive_id}"' if shared_drive_id else 'None'}
 CASE_FOLDER_ID = "{folder_ids['case_folder_id']}"
 KO_EVIDENCE_FOLDER_ID = "{folder_ids['ko_evidence_folder_id']}"
 OTSU_EVIDENCE_FOLDER_ID = {f'"{folder_ids.get("otsu_evidence_folder_id")}"' if folder_ids.get('otsu_evidence_folder_id') else 'None'}
+EXPORT_FOLDER_ID = {f'"{folder_ids.get("export_folder_id")}"' if folder_ids.get('export_folder_id') else 'None'}
 
 DATABASE_FOLDER_ID = None
 TEMP_FOLDER_ID = None
@@ -439,7 +457,7 @@ def get_timestamp():
     print(f"\n✅ config.pyを作成しました: {output_path}")
 
 
-def generate_database_file(case_info, output_path="database.json"):
+def generate_database_file(case_info, folder_ids, output_path="database.json"):
     """database.jsonを初期化"""
     
     if os.path.exists(output_path):
@@ -462,7 +480,9 @@ def generate_database_file(case_info, output_path="database.json"):
             "created_at": datetime.now().isoformat(),
             "last_updated": datetime.now().isoformat(),
             "total_evidence_count": 0,
-            "completed_count": 0
+            "completed_count": 0,
+            "case_folder_id": folder_ids.get('case_folder_id'),
+            "export_folder_id": folder_ids.get('export_folder_id')
         }
     }
     
@@ -487,6 +507,8 @@ def print_next_steps(folder_ids):
     print(f"  - 甲号証フォルダ: https://drive.google.com/drive/folders/{folder_ids['ko_evidence_folder_id']}")
     if folder_ids.get('otsu_evidence_folder_id'):
         print(f"  - 乙号証フォルダ: https://drive.google.com/drive/folders/{folder_ids['otsu_evidence_folder_id']}")
+    if folder_ids.get('export_folder_id'):
+        print(f"  - エクスポートファイルフォルダ: https://drive.google.com/drive/folders/{folder_ids['export_folder_id']}")
     
     print("\n📋 次のステップ:")
     print("  1. OpenAI APIキーを設定:")
@@ -539,7 +561,7 @@ def main():
     print("━"*70)
     
     generate_config_file(case_info, drive_settings, folder_ids)
-    generate_database_file(case_info)
+    generate_database_file(case_info, folder_ids)
     
     # 次のステップを表示
     print_next_steps(folder_ids)
