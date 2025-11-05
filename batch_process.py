@@ -32,6 +32,11 @@ from datetime import datetime
 from typing import List, Dict
 import time
 
+# プロジェクトルートをPythonパスに追加
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 # 自作モジュールのインポート
 try:
     from global_config import *

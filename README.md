@@ -4,6 +4,8 @@
 > 
 > **ダブルクリックで簡単起動**: `start.command` (macOS) / `start.bat` (Windows) / `start.sh` (Linux)
 >
+> **🔧 インポートエラーが出た場合**: [**IMPORT_FIX.md**](IMPORT_FIX.md) - モジュールインポートエラーの解決方法
+>
 > **🧹 プロジェクトクリーンアップ**: [**不要ファイル削除ガイド**](CLEANUP_INSTRUCTIONS.md) - 一時ファイルや機密ファイルを安全に削除
 
 **🎉 v3.8.0 新機能: 時系列ストーリー組み立て機能 - Claude AI統合！**
