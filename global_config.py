@@ -275,10 +275,12 @@ QUALITY_CHECK_THRESHOLDS = {
 # ローカルパス設定
 # ================================
 
-LOCAL_WORK_DIR = "/Users/ogaiku/create-junbisyomen"
+# プロジェクトルートを動的に取得
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+LOCAL_WORK_DIR = PROJECT_ROOT
 LOCAL_TEMP_DIR = "/tmp/phase1_complete_temp"
 LOCAL_CACHE_DIR = "/tmp/phase1_cache"
-LOCAL_PROMPT_PATH = f"{LOCAL_WORK_DIR}/prompts/Phase1_EvidenceAnalysis.txt"
+LOCAL_PROMPT_PATH = os.path.join(PROJECT_ROOT, "prompts", "Phase1_EvidenceAnalysis.txt")
 
 # ================================
 # ログ設定
