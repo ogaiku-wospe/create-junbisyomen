@@ -26,10 +26,10 @@ import shutil
 
 try:
     import global_config as gconfig
-    from case_manager import CaseManager
-    from ai_analyzer_complete import AIAnalyzerComplete
-    from metadata_extractor import MetadataExtractor
-    from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
+    from src.case_manager import CaseManager
+    from src.ai_analyzer_complete import AIAnalyzerComplete
+    from src.metadata_extractor import MetadataExtractor
+    from src.gdrive_database_manager import GDriveDatabaseManager, create_database_manager
 except ImportError as e:
     print(f"❌ エラー: モジュールのインポートに失敗しました: {e}")
     sys.exit(1)
