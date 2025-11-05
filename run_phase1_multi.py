@@ -627,48 +627,38 @@ class Phase1MultiRunner:
             return None
     
     def get_evidence_number_input(self, evidence_type: str = 'ko') -> Optional[List[str]]:
-        """証拠番号の入力取得
+        """証拠番号の入力取得（改善版）
         
         Args:
             evidence_type: 'ko' または 'otsu'
         
         Examples:
-            tmp_070-073  -> ['tmp_070', 'tmp_071', 'tmp_072', 'tmp_073']
-            tmp_001-005  -> ['tmp_001', 'tmp_002', 'tmp_003', 'tmp_004', 'tmp_005']
-            tmp_001-011  -> ['tmp_001', 'tmp_002', ..., 'tmp_011']
+            ユーザー入力: 001      -> ['tmp_ko_001'] （甲号証の場合）
+            ユーザー入力: 070-073  -> ['tmp_ko_070', 'tmp_ko_071', 'tmp_ko_072', 'tmp_ko_073']
+            ユーザー入力: 001-011  -> ['tmp_ko_001', 'tmp_ko_002', ..., 'tmp_ko_011']
         """
-        print("\n証拠番号の入力")
-        print("  単一指定: tmp_001, tmp_020")
-        print("  範囲指定: tmp_001-011, tmp_020-030")
-        print("  キャンセル: 空Enter")
+        # 証拠種別に応じたプレフィックスを取得
+        prefix = gconfig.TEMP_PREFIX_MAP.get(evidence_type, 'tmp_ko_')
+        evidence_type_name = gconfig.EVIDENCE_TYPE_DISPLAY_NAMES.get(evidence_type, '甲号証')
+        
+        print(f"\n証拠番号の入力（{evidence_type_name}）")
+        print(f"  単一指定: 001, 020")
+        print(f"  範囲指定: 001-011, 020-030")
+        print(f"  ※ 自動的に '{prefix}' が付加されます")
+        print(f"  キャンセル: 空Enter")
         user_input = input("\n> ").strip()
         
         if not user_input:
             return None
         
-        # 範囲指定の処理（例: tmp_001-011, tmp_020-030）
+        # 範囲指定の処理（例: 001-011, 020-030）
         if '-' in user_input and user_input.count('-') == 1:
             try:
                 # 範囲の開始と終了を分離
                 start_str, end_str = user_input.split('-')
                 
-                # 開始番号から prefix と数字部分を分離
-                # 例: "tmp_001" -> prefix="tmp_", start_num="001"
-                # 例: "tmp_020" -> prefix="tmp_", start_num="020"
-                import re
-                match = re.match(r'^(.+?)(\d+)$', start_str)
-                if not match:
-                    logger.error("範囲指定の形式が正しくありません（開始番号）")
-                    print("\nエラー: 範囲指定の形式が正しくありません")
-                    print("  正しい例: tmp_001-011, tmp_020-030")
-                    print(f"  入力値: {user_input}")
-                    return None
-                
-                prefix = match.group(1)  # "tmp_" or "ko"
-                start_num_str = match.group(2)  # "001" or "70"
-                
-                # 数値変換
-                start_num = int(start_num_str)
+                # 数値変換（数字のみを想定）
+                start_num = int(start_str)
                 end_num = int(end_str)
                 
                 if start_num > end_num:
@@ -684,21 +674,35 @@ class Phase1MultiRunner:
                     return None
                 
                 # ゼロ埋めの桁数を判定（開始番号の桁数を維持）
-                width = len(start_num_str)
+                width = len(start_str)
                 
-                # 範囲内の証拠番号リストを生成
-                # 例: tmp_001, tmp_002, ..., tmp_011
-                return [f"{prefix}{i:0{width}d}" for i in range(start_num, end_num + 1)]
+                # 範囲内の証拠番号リストを生成（プレフィックスを自動付加）
+                # 例: tmp_ko_001, tmp_ko_002, ..., tmp_ko_011
+                evidence_numbers = [f"{prefix}{i:0{width}d}" for i in range(start_num, end_num + 1)]
+                
+                print(f"\n✅ 生成された証拠番号: {evidence_numbers[0]} 〜 {evidence_numbers[-1]} ({len(evidence_numbers)}件)")
+                return evidence_numbers
                 
             except ValueError as e:
                 logger.error(f"範囲指定の形式が正しくありません: {e}")
                 print("\nエラー: 範囲指定の形式が正しくありません")
-                print("  正しい例: tmp_001-011, tmp_020-030")
+                print("  正しい例: 001-011, 020-030（数字のみ）")
                 print(f"  詳細: {e}")
                 return None
         else:
-            # 単一証拠番号
-            return [user_input]
+            # 単一証拠番号（数字のみの入力を想定）
+            try:
+                # 数字部分のみかチェック
+                num = int(user_input)
+                width = len(user_input)
+                evidence_number = f"{prefix}{num:0{width}d}"
+                print(f"\n✅ 生成された証拠番号: {evidence_number}")
+                return [evidence_number]
+            except ValueError:
+                # 数字でない場合はそのまま返す（後方互換性）
+                logger.warning(f"旧形式の証拠番号入力: {user_input}")
+                print(f"\n⚠️ 旧形式の証拠番号として処理: {user_input}")
+                return [user_input]
     
     def search_evidence_files_from_gdrive(self) -> List[Dict]:
         """Google Driveから証拠ファイルを検索
