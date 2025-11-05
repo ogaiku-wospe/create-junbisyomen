@@ -1,0 +1,1403 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase 1 Complete Database Schema v3.1 (Practical Edition)",
+  "description": "実用性を重視したdatabase.jsonのスキーマ定義 - 準備書面作成に最適化",
+  "version": "3.1.0",
+  "type": "object",
+  "required": [
+    "metadata",
+    "case_info",
+    "evidence",
+    "phase1_progress"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "データベースメタデータ",
+      "required": [
+        "database_version",
+        "case_id",
+        "last_updated"
+      ],
+      "properties": {
+        "database_version": {
+          "type": "string",
+          "const": "3.1",
+          "description": "データベース構造バージョン（実用版）"
+        },
+        "case_id": {
+          "type": "string",
+          "description": "事件ID"
+        },
+        "case_name": {
+          "type": "string",
+          "description": "事件名"
+        },
+        "case_number": {
+          "type": "string",
+          "description": "事件番号"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "データベース作成日時（ISO 8601形式）"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "最終更新日時（ISO 8601形式）"
+        },
+        "last_phase": {
+          "type": "string",
+          "description": "最後に実行したPhase"
+        },
+        "last_action": {
+          "type": "string",
+          "description": "最後に実行したアクション"
+        },
+        "next_recommended_action": {
+          "type": "string",
+          "description": "次に推奨されるアクション"
+        },
+        "gdrive_database_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Google Drive上のdatabase.jsonのファイルID"
+        },
+        "system_version": {
+          "type": "string",
+          "description": "Phase 1システムバージョン"
+        },
+        "schema_improvements": {
+          "type": "string",
+          "description": "v3.1の改善内容：準備書面作成に最適化した構造化フィールド追加"
+        }
+      }
+    },
+    "case_info": {
+      "type": "object",
+      "description": "事件情報",
+      "properties": {
+        "case_name": {
+          "type": "string"
+        },
+        "case_number": {
+          "type": "string"
+        },
+        "case_type": {
+          "type": "string"
+        },
+        "court": {
+          "type": "string"
+        },
+        "plaintiff": {
+          "type": "string"
+        },
+        "defendant": {
+          "type": "string"
+        },
+        "filing_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "case_summary": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "description": "証拠リスト",
+      "items": {
+        "$ref": "#/definitions/evidence_item"
+      }
+    },
+    "phase1_progress": {
+      "type": "array",
+      "description": "Phase 1進捗記録",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "in_progress",
+              "error"
+            ]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "evidence_item": {
+      "type": "object",
+      "description": "証拠アイテム（完全版）",
+      "required": [
+        "evidence_id",
+        "evidence_number",
+        "complete_metadata",
+        "phase1_complete_analysis"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "description": "証拠ID（例: ko070）"
+        },
+        "evidence_number": {
+          "type": "string",
+          "description": "証拠番号（例: 甲070）"
+        },
+        "original_filename": {
+          "type": "string",
+          "description": "元のファイル名"
+        },
+        "evidence_type": {
+          "type": "string",
+          "enum": [
+            "our",
+            "opponent"
+          ],
+          "description": "証拠タイプ"
+        },
+        "registered_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "登録日時"
+        },
+        "complete_metadata": {
+          "$ref": "#/definitions/complete_metadata"
+        },
+        "phase1_complete_analysis": {
+          "$ref": "#/definitions/phase1_complete_analysis"
+        }
+      }
+    },
+    "complete_metadata": {
+      "type": "object",
+      "description": "完全メタデータ",
+      "properties": {
+        "basic": {
+          "type": "object",
+          "properties": {
+            "file_name": {
+              "type": "string"
+            },
+            "file_extension": {
+              "type": "string"
+            },
+            "file_size_bytes": {
+              "type": "integer"
+            },
+            "file_size_human": {
+              "type": "string"
+            },
+            "mime_type": {
+              "type": "string"
+            },
+            "created_time": {
+              "type": "string"
+            },
+            "modified_time": {
+              "type": "string"
+            }
+          }
+        },
+        "hashes": {
+          "type": "object",
+          "properties": {
+            "sha256": {
+              "type": "string"
+            },
+            "md5": {
+              "type": "string"
+            },
+            "sha1": {
+              "type": "string"
+            }
+          }
+        },
+        "gdrive": {
+          "type": "object",
+          "properties": {
+            "file_id": {
+              "type": "string"
+            },
+            "file_url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "download_url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "web_view_link": {
+              "type": "string",
+              "format": "uri"
+            },
+            "parent_folders": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "version": {
+              "type": "string"
+            }
+          }
+        },
+        "format_specific": {
+          "type": "object",
+          "description": "ファイル形式固有のメタデータ"
+        }
+      }
+    },
+    "phase1_complete_analysis": {
+      "type": "object",
+      "description": "Phase 1完全言語化分析結果（実用版v3.1）",
+      "properties": {
+        "complete_metadata": {
+          "$ref": "#/definitions/complete_metadata"
+        },
+        "file_processing_result": {
+          "type": "object",
+          "properties": {
+            "file_type": {
+              "type": "string"
+            },
+            "processing_status": {
+              "type": "string"
+            },
+            "content": {
+              "type": "object"
+            }
+          }
+        },
+        "ai_analysis": {
+          "type": "object",
+          "description": "AI分析結果（実用版v3.1 - 準備書面作成最適化）",
+          "properties": {
+            "evidence_id": {
+              "type": "string"
+            },
+            "verbalization_level": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "confidence_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence_metadata": {
+              "type": "object",
+              "description": "証拠の基本情報"
+            },
+            "full_content": {
+              "$ref": "#/definitions/full_content"
+            },
+            "objective_analysis": {
+              "$ref": "#/definitions/objective_analysis_v3_1"
+            },
+            "extracted_data": {
+              "$ref": "#/definitions/extracted_data_v3_1"
+            },
+            "metadata_analysis": {
+              "type": "object",
+              "properties": {
+                "file_properties": {
+                  "type": "string"
+                },
+                "creation_metadata": {
+                  "type": "string"
+                },
+                "technical_details": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "quality_assessment": {
+          "type": "object",
+          "properties": {
+            "verbalization_level": {
+              "type": "integer"
+            },
+            "confidence_score": {
+              "type": "number"
+            },
+            "completeness_score": {
+              "type": "number"
+            },
+            "assessment_details": {
+              "type": "object"
+            }
+          }
+        },
+        "analysis_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "analysis_version": {
+          "type": "object",
+          "properties": {
+            "system_version": {
+              "type": "string"
+            },
+            "database_version": {
+              "type": "string"
+            },
+            "prompt_version": {
+              "type": "string",
+              "const": "2.0",
+              "description": "実用版プロンプトバージョン"
+            },
+            "model": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "full_content": {
+      "type": "object",
+      "description": "完全言語化された内容",
+      "properties": {
+        "complete_description": {
+          "type": "string",
+          "description": "証拠の内容を完全な文で記述"
+        },
+        "visual_information": {
+          "type": "object",
+          "properties": {
+            "overall_description": {
+              "type": "string"
+            },
+            "key_elements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "layout_composition": {
+              "type": "string"
+            },
+            "text_in_image": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "string"
+                  },
+                  "style": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "emphasis": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "background_details": {
+              "type": "string"
+            },
+            "quality_notes": {
+              "type": "string"
+            }
+          }
+        },
+        "textual_content": {
+          "type": "object",
+          "properties": {
+            "extracted_text": {
+              "type": "string",
+              "description": "文書内の全テキストを正確に抽出"
+            },
+            "text_summary": {
+              "type": "string",
+              "description": "テキスト内容の客観的要約（完全な文）"
+            },
+            "document_structure": {
+              "type": "string"
+            },
+            "formatting_notes": {
+              "type": "string"
+            }
+          }
+        },
+        "ocr_results": {
+          "type": "object",
+          "properties": {
+            "extracted_text": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "objective_analysis_v3_1": {
+      "type": "object",
+      "description": "客観的分析結果（v3.1実用版 - 準備書面作成最適化）",
+      "properties": {
+        "document_type": {
+          "type": "string",
+          "description": "文書種類の客観的分類"
+        },
+        "observable_facts": {
+          "type": "object",
+          "description": "観察可能な事実（構造化版）",
+          "properties": {
+            "structured_facts": {
+              "type": "array",
+              "description": "構造化された事実のリスト",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "fact_id": {
+                    "type": "string",
+                    "description": "事実ID（例：fact_001）"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "document_basic_info",
+                      "content_substance",
+                      "procedural_info",
+                      "contextual_info"
+                    ],
+                    "description": "事実のカテゴリ"
+                  },
+                  "fact_statement": {
+                    "type": "string",
+                    "description": "完全な文として記述された客観的事実（準備書面に引用可能）"
+                  },
+                  "source_location": {
+                    "type": "string",
+                    "description": "出典位置（例：文書上部のタイトル欄、本文第2段落第3文）"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "related_facts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "関連する他の事実のID"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "タグ（contract, date, amount, party, obligation, right, condition等）"
+                  }
+                },
+                "required": [
+                  "fact_id",
+                  "category",
+                  "fact_statement",
+                  "source_location",
+                  "confidence"
+                ]
+              }
+            },
+            "fact_summary": {
+              "type": "string",
+              "description": "全体の事実を要約した完全な文（3-5文程度）"
+            },
+            "fact_count": {
+              "type": "integer",
+              "description": "抽出された事実の総数"
+            }
+          },
+          "required": [
+            "structured_facts",
+            "fact_summary"
+          ]
+        },
+        "temporal_information": {
+          "type": "object",
+          "description": "時系列情報（構造化版）",
+          "properties": {
+            "document_date": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date",
+              "description": "証拠の作成年月日（YYYY-MM-DD形式）"
+            },
+            "document_date_source": {
+              "type": "string",
+              "description": "作成日の根拠"
+            },
+            "date_confidence": {
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "date_confidence_reason": {
+              "type": "string",
+              "description": "信頼度の理由"
+            },
+            "all_dates_structured": {
+              "type": "array",
+              "description": "全ての日付を構造化したリスト",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date_id": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "date_type": {
+                    "type": "string",
+                    "description": "contract_signing, payment_deadline, notice_date, termination_date等"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "この日付の意味を完全な文で説明"
+                  },
+                  "participants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "source_location": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "date_id",
+                  "date",
+                  "date_type",
+                  "description"
+                ]
+              }
+            },
+            "chronological_summary": {
+              "type": "string",
+              "description": "時系列を完全な文で要約"
+            },
+            "timeline_visualization": {
+              "type": "array",
+              "description": "タイムライン可視化用データ",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "event": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string"
+                  },
+                  "participants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": [
+            "document_date",
+            "document_date_source",
+            "date_confidence"
+          ]
+        },
+        "parties_mentioned": {
+          "type": "object",
+          "description": "登場人物・組織（構造化版）",
+          "properties": {
+            "detailed_parties": {
+              "type": "array",
+              "description": "当事者の詳細リスト",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "party_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "individual",
+                      "organization"
+                    ]
+                  },
+                  "role_in_document": {
+                    "type": "string",
+                    "description": "文書内での役割"
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "properties": {
+                      "address": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "title": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "contact": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "identification": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  },
+                  "actions_described": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "文書内で記載されている行為"
+                  },
+                  "statements_made": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "当事者が述べた内容（一字一句正確に）"
+                  },
+                  "first_appearance": {
+                    "type": "string",
+                    "description": "最初に登場する位置"
+                  }
+                },
+                "required": [
+                  "party_id",
+                  "name",
+                  "type",
+                  "role_in_document"
+                ]
+              }
+            },
+            "relationships": {
+              "type": "array",
+              "description": "当事者間の関係性",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "relationship_id": {
+                    "type": "string"
+                  },
+                  "from_party": {
+                    "type": "string"
+                  },
+                  "to_party": {
+                    "type": "string"
+                  },
+                  "relationship_type": {
+                    "type": "string"
+                  },
+                  "relationship_description": {
+                    "type": "string",
+                    "description": "関係性の説明を完全な文で記述"
+                  },
+                  "basis": {
+                    "type": "string",
+                    "description": "関係性の根拠"
+                  }
+                }
+              }
+            },
+            "party_summary": {
+              "type": "string",
+              "description": "当事者関係の要約を完全な文で記述"
+            }
+          },
+          "required": [
+            "detailed_parties"
+          ]
+        },
+        "financial_information": {
+          "type": "object",
+          "description": "金額情報（構造化版）",
+          "properties": {
+            "detailed_amounts": {
+              "type": "array",
+              "description": "金額の詳細リスト",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "amount_id": {
+                    "type": "string"
+                  },
+                  "amount_value": {
+                    "type": "number",
+                    "description": "数値としての金額"
+                  },
+                  "amount_display": {
+                    "type": "string",
+                    "description": "表示形式（500,000円等）"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "通貨コード（JPY, USD等）"
+                  },
+                  "amount_type": {
+                    "type": "string",
+                    "description": "contract_price, penalty, deposit, payment, refund, damages等"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "金額の意味を完全な文で説明"
+                  },
+                  "payment_status": {
+                    "type": "string",
+                    "enum": [
+                      "paid",
+                      "unpaid",
+                      "partially_paid",
+                      "claimed",
+                      "unknown"
+                    ]
+                  },
+                  "payment_details": {
+                    "type": "string",
+                    "description": "支払状況の詳細"
+                  },
+                  "due_date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
+                  "source_location": {
+                    "type": "string"
+                  },
+                  "related_parties": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount_id",
+                  "amount_value",
+                  "amount_display",
+                  "currency",
+                  "amount_type",
+                  "description"
+                ]
+              }
+            },
+            "financial_calculations": {
+              "type": "object",
+              "properties": {
+                "total_claimed": {
+                  "type": "number"
+                },
+                "total_paid": {
+                  "type": "number"
+                },
+                "total_unpaid": {
+                  "type": "number"
+                },
+                "breakdown": {
+                  "type": "string"
+                }
+              }
+            },
+            "financial_summary": {
+              "type": "string",
+              "description": "金額情報の要約を完全な文で記述"
+            }
+          }
+        },
+        "identifiers": {
+          "type": "object",
+          "description": "識別子情報",
+          "properties": {
+            "contract_numbers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "source_location": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "reference_numbers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "serial_numbers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "case_numbers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "other_identifiers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "signatures_and_seals": {
+          "type": "object",
+          "description": "署名・捺印情報",
+          "properties": {
+            "signatures": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "signature_id": {
+                    "type": "string"
+                  },
+                  "signatory_name": {
+                    "type": "string"
+                  },
+                  "signature_type": {
+                    "type": "string",
+                    "enum": [
+                      "handwritten",
+                      "digital",
+                      "stamped"
+                    ]
+                  },
+                  "signature_date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
+                  "signature_location": {
+                    "type": "string"
+                  },
+                  "related_party": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "seals": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "seal_id": {
+                    "type": "string"
+                  },
+                  "seal_type": {
+                    "type": "string",
+                    "enum": [
+                      "company_seal",
+                      "personal_seal",
+                      "official_seal"
+                    ]
+                  },
+                  "seal_description": {
+                    "type": "string"
+                  },
+                  "seal_location": {
+                    "type": "string"
+                  },
+                  "seal_condition": {
+                    "type": "string",
+                    "enum": [
+                      "clear",
+                      "unclear",
+                      "partial"
+                    ]
+                  }
+                }
+              }
+            },
+            "authentication_summary": {
+              "type": "string",
+              "description": "署名・捺印の状況を完全な文で要約"
+            }
+          }
+        },
+        "document_state": {
+          "type": "object",
+          "description": "文書の状態（詳細版）",
+          "properties": {
+            "completeness": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "incomplete",
+                    "partial"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                },
+                "missing_parts": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "page_count": {
+                  "type": "integer"
+                },
+                "page_continuity": {
+                  "type": "string"
+                }
+              }
+            },
+            "modifications": {
+              "type": "object",
+              "properties": {
+                "has_modifications": {
+                  "type": "boolean"
+                },
+                "details": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "modification_id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "correction",
+                          "deletion",
+                          "addition",
+                          "strikethrough"
+                        ]
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "method": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "annotations": {
+              "type": "object",
+              "properties": {
+                "has_annotations": {
+                  "type": "boolean"
+                },
+                "details": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "annotation_id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "handwritten_note",
+                          "highlighter",
+                          "sticky_note",
+                          "stamp"
+                        ]
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "ink_color": {
+                        "type": "string"
+                      },
+                      "estimated_timing": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "preservation_state": {
+              "type": "object",
+              "properties": {
+                "overall_condition": {
+                  "type": "string",
+                  "enum": [
+                    "excellent",
+                    "good",
+                    "fair",
+                    "poor"
+                  ]
+                },
+                "details": {
+                  "type": "string"
+                },
+                "damage_description": {
+                  "type": "string"
+                },
+                "authenticity_indicators": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "physical_characteristics": {
+              "type": "object",
+              "properties": {
+                "format": {
+                  "type": "string"
+                },
+                "printing_method": {
+                  "type": "string"
+                },
+                "paper_quality": {
+                  "type": "string"
+                },
+                "binding": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "quotable_statements": {
+          "type": "array",
+          "description": "引用可能な重要文言（v3.1新規追加）",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quote_id": {
+                "type": "string"
+              },
+              "statement": {
+                "type": "string",
+                "description": "一字一句そのままの引用文"
+              },
+              "location": {
+                "type": "string"
+              },
+              "context": {
+                "type": "string",
+                "description": "この引用文の文脈説明"
+              },
+              "verbatim": {
+                "type": "boolean",
+                "const": true
+              },
+              "language": {
+                "type": "string"
+              },
+              "emphasis": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "bold",
+                  "underline",
+                  "highlight"
+                ]
+              },
+              "speaker": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "quote_id",
+              "statement",
+              "location",
+              "context"
+            ]
+          }
+        },
+        "cross_reference_potential": {
+          "type": "array",
+          "description": "他証拠との照合可能性（v3.1新規追加）",
+          "items": {
+            "type": "object",
+            "properties": {
+              "reference_id": {
+                "type": "string"
+              },
+              "this_evidence_element": {
+                "type": "string",
+                "description": "本証拠内の要素"
+              },
+              "potential_related_evidence": {
+                "type": "string",
+                "description": "関連する可能性のある他の証拠の種類"
+              },
+              "matching_criteria": {
+                "type": "string",
+                "description": "照合基準"
+              },
+              "objective_note": {
+                "type": "string",
+                "description": "客観的な注記"
+              }
+            },
+            "required": [
+              "reference_id",
+              "this_evidence_element",
+              "matching_criteria"
+            ]
+          }
+        }
+      },
+      "required": [
+        "document_type",
+        "observable_facts",
+        "temporal_information"
+      ]
+    },
+    "extracted_data_v3_1": {
+      "type": "object",
+      "description": "抽出データ（v3.1構造化版）",
+      "properties": {
+        "key_terms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "term": {
+                "type": "string"
+              },
+              "definition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "usage_context": {
+                "type": "string"
+              },
+              "source_location": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "condition_id": {
+                "type": "string"
+              },
+              "condition_statement": {
+                "type": "string",
+                "description": "条件の内容を完全な文で記述"
+              },
+              "condition_type": {
+                "type": "string",
+                "enum": [
+                  "precedent",
+                  "subsequent",
+                  "concurrent"
+                ]
+              },
+              "source_location": {
+                "type": "string"
+              },
+              "related_parties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "obligation_id": {
+                "type": "string"
+              },
+              "obligor": {
+                "type": "string",
+                "description": "義務者のparty_id"
+              },
+              "obligee": {
+                "type": "string",
+                "description": "権利者のparty_id"
+              },
+              "obligation_statement": {
+                "type": "string",
+                "description": "義務の内容を完全な文で記述"
+              },
+              "deadline": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "source_location": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "rights": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "right_id": {
+                "type": "string"
+              },
+              "right_holder": {
+                "type": "string",
+                "description": "権利者のparty_id"
+              },
+              "right_statement": {
+                "type": "string",
+                "description": "権利の内容を完全な文で記述"
+              },
+              "source_location": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "exception_id": {
+                "type": "string"
+              },
+              "exception_statement": {
+                "type": "string",
+                "description": "例外規定の内容を完全な文で記述"
+              },
+              "applicable_condition": {
+                "type": "string"
+              },
+              "source_location": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
