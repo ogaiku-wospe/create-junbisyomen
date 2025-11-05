@@ -38,8 +38,8 @@ from pathlib import Path
 
 try:
     import global_config as gconfig
-    from case_manager import CaseManager
-    from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
+    from src.case_manager import CaseManager
+    from src.gdrive_database_manager import GDriveDatabaseManager, create_database_manager
     from anthropic import Anthropic
     from dotenv import load_dotenv
     from googleapiclient.http import MediaFileUpload
