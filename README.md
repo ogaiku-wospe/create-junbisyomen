@@ -54,6 +54,15 @@ Phase1_Evidence Analysis Systemは、証拠ファイル（画像、PDF、Word、
 - ✅ **品質保証**: 完全性スコア、信頼度スコア、言語化レベル評価
 - ✅ **database.json v3.0**: プログラム完全解釈可能な構造化データ
 
+## 📁 プロジェクト構造
+
+プロジェクトは見やすく整理されています：
+- **[📁 FILE_STRUCTURE.md](FILE_STRUCTURE.md)** - 詳細なファイル構造
+- **📚 docs/** - すべてのドキュメント（用途別に整理）
+- **🐍 src/** - Pythonソースコード
+- **🔧 scripts/** - ユーティリティスクリプト
+- **📝 prompts/** - AI分析プロンプト
+
 ## 📋 システム要件
 
 - **Python**: 3.8以上

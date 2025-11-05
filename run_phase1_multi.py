@@ -26,25 +26,25 @@ from typing import List, Optional, Dict
 # 自作モジュールのインポート
 try:
     import global_config as gconfig
-    from case_manager import CaseManager
-    from evidence_organizer import EvidenceOrganizer
-    from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
+    from src.case_manager import CaseManager
+    from src.evidence_organizer import EvidenceOrganizer
+    from src.gdrive_database_manager import GDriveDatabaseManager, create_database_manager
     # 既存のモジュール（事件固有の処理）
-    from metadata_extractor import MetadataExtractor
-    from file_processor import FileProcessor
-    from ai_analyzer_complete import AIAnalyzerComplete
-    from evidence_editor_ai import EvidenceEditorAI
-    from timeline_builder import TimelineBuilder
+    from src.metadata_extractor import MetadataExtractor
+    from src.file_processor import FileProcessor
+    from src.ai_analyzer_complete import AIAnalyzerComplete
+    from src.evidence_editor_ai import EvidenceEditorAI
+    from src.timeline_builder import TimelineBuilder
 except ImportError as e:
     print(f"エラー: モジュールのインポートに失敗しました: {e}")
     print("\n必要なファイル:")
     print("  - global_config.py")
-    print("  - case_manager.py")
-    print("  - evidence_organizer.py")
-    print("  - metadata_extractor.py")
-    print("  - file_processor.py")
-    print("  - ai_analyzer_complete.py")
-    print("  - evidence_editor_ai.py")
+    print("  - src/case_manager.py")
+    print("  - src/evidence_organizer.py")
+    print("  - src/metadata_extractor.py")
+    print("  - src/file_processor.py")
+    print("  - src/ai_analyzer_complete.py")
+    print("  - src/evidence_editor_ai.py")
     sys.exit(1)
 
 # ロギング設定

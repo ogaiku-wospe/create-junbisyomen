@@ -15,8 +15,8 @@ from typing import Dict, List, Optional, Any
 import openai
 
 from global_config import *
-from file_processor import FileProcessor
-from metadata_extractor import MetadataExtractor
+from src.file_processor import FileProcessor
+from src.metadata_extractor import MetadataExtractor
 
 logger = logging.getLogger(__name__)
 

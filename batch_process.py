@@ -35,9 +35,9 @@ import time
 # 自作モジュールのインポート
 try:
     from global_config import *
-    from metadata_extractor import MetadataExtractor
-    from file_processor import FileProcessor
-    from ai_analyzer_complete import AIAnalyzerComplete
+    from src.metadata_extractor import MetadataExtractor
+    from src.file_processor import FileProcessor
+    from src.ai_analyzer_complete import AIAnalyzerComplete
 except ImportError as e:
     print(f"❌ エラー: モジュールのインポートに失敗しました: {e}")
     sys.exit(1)
