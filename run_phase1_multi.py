@@ -1152,10 +1152,14 @@ class Phase1MultiRunner:
         print("="*70)
         
         # database.jsonから未確定証拠を取得（証拠種別でフィルター）
+        # tmp_プレフィックスが付いている証拠は、statusに関わらず未確定として扱う
         database = self.load_database()
         pending_evidence = [
             e for e in database.get('evidence', []) 
-            if e.get('status') == 'pending' and e.get('evidence_type', 'ko') == evidence_type
+            if (e.get('evidence_id', '').startswith('tmp_') or 
+                e.get('evidence_number', '').find('tmp_') != -1 or
+                e.get('status') == 'pending') and 
+               e.get('evidence_type', 'ko') == evidence_type
         ]
         
         if not pending_evidence:
@@ -1165,7 +1169,9 @@ class Phase1MultiRunner:
         print(f"\n{type_name}の未確定証拠: {len(pending_evidence)}件")
         print("\n現在の順序:")
         for idx, evidence in enumerate(pending_evidence, 1):
-            print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']}")
+            # temp_idまたはevidence_idを使用
+            display_id = evidence.get('temp_id') or evidence.get('evidence_id', '不明')
+            print(f"  [{idx}] {display_id} - {evidence['original_filename']}")
         
         prefix = "ko" if evidence_type == 'ko' else "otsu"
         print("\n【処理内容】")
@@ -1190,7 +1196,8 @@ class Phase1MultiRunner:
             return
         
         for idx, evidence in enumerate(pending_evidence, 1):
-            print(f"\n[{idx}/{len(pending_evidence)}] {evidence['temp_id']} - {evidence['original_filename']}")
+            display_id = evidence.get('temp_id') or evidence.get('evidence_id', '不明')
+            print(f"\n[{idx}/{len(pending_evidence)}] {display_id} - {evidence['original_filename']}")
             
             # まず、既存のAI分析からdocument_dateを取得
             document_date = None
@@ -1236,7 +1243,7 @@ class Phase1MultiRunner:
                 
                 # 日付抽出（軽量版）
                 date_result = self.ai_analyzer.extract_date_from_evidence(
-                    evidence_id=evidence['temp_id'],
+                    evidence_id=evidence.get('temp_id') or evidence.get('evidence_id', '不明'),
                     file_path=file_path,
                     file_type=file_type,
                     original_filename=evidence['original_filename']
@@ -1277,7 +1284,8 @@ class Phase1MultiRunner:
         print("\nソート後の順序:")
         for idx, evidence in enumerate(sorted_evidence, 1):
             date_str = evidence.get('extracted_date', '日付なし')
-            print(f"  [{idx}] {evidence['temp_id']} - {evidence['original_filename']} ({date_str})")
+            display_id = evidence.get('temp_id') or evidence.get('evidence_id', '不明')
+            print(f"  [{idx}] {display_id} - {evidence['original_filename']} ({date_str})")
         
         # ステップ3: 確定番号割り当て・移動
         print("\n" + "="*70)
@@ -1303,7 +1311,8 @@ class Phase1MultiRunner:
             ko_id = f"ko{ko_number:03d}"
             ko_number_kanji = f"甲{ko_number:03d}"
             
-            print(f"\n[{idx}/{len(sorted_evidence)}] {evidence['temp_id']} → {ko_id}")
+            old_id = evidence.get('temp_id') or evidence.get('evidence_id', '不明')
+            print(f"\n[{idx}/{len(sorted_evidence)}] {old_id} → {ko_id}")
             date_str = evidence.get('extracted_date', '日付なし')
             print(f"  日付: {date_str}")
             
@@ -1313,8 +1322,8 @@ class Phase1MultiRunner:
                 
                 # 新しいファイル名を生成
                 old_filename = evidence['renamed_filename']
-                # tmp_XXX_ の部分を koXXX_ に置換
-                new_filename = old_filename.replace(evidence['temp_id'], ko_id)
+                # tmp_XXX_ または tmp_ko_XXX の部分を koXXX_ に置換
+                new_filename = old_filename.replace(old_id, ko_id)
                 
                 # ファイルを移動してリネーム
                 file = service.files().update(
@@ -1385,7 +1394,7 @@ class Phase1MultiRunner:
                     evidence_id = evidence.get('evidence_number', evidence.get('evidence_id', 'N/A'))
                 elif status == 'pending':
                     status_text = "[未確定]"
-                    evidence_id = evidence.get('temp_id', 'N/A')
+                    evidence_id = evidence.get('temp_id') or evidence.get('evidence_id', 'N/A')
                 else:
                     status_text = "[不明]"
                     evidence_id = 'N/A'
