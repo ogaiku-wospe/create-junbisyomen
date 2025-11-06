@@ -1821,11 +1821,12 @@ class TimelineBuilder:
                 'parents': [timeline_folder_id]
             }
             
-            # ファイルをアップロード
+            # ファイルをアップロード（共有ドライブ対応）
             media = MediaFileUpload(local_file_path, mimetype=mime_type, resumable=True)
             uploaded_file = service.files().create(
                 body=file_metadata,
                 media_body=media,
+                supportsAllDrives=True,
                 fields='id, name, webViewLink'
             ).execute()
             
@@ -1852,10 +1853,12 @@ class TimelineBuilder:
             timelineフォルダのID
         """
         try:
-            # 既存のtimelineフォルダを検索
+            # 既存のtimelineフォルダを検索（共有ドライブ対応）
             query = f"name='timeline' and '{parent_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
             results = service.files().list(
                 q=query,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
                 fields='files(id, name)',
                 pageSize=1
             ).execute()
@@ -1864,7 +1867,7 @@ class TimelineBuilder:
             if files:
                 return files[0]['id']
             
-            # なければ作成
+            # なければ作成（共有ドライブ対応）
             folder_metadata = {
                 'name': 'timeline',
                 'mimeType': 'application/vnd.google-apps.folder',
@@ -1873,6 +1876,7 @@ class TimelineBuilder:
             
             folder = service.files().create(
                 body=folder_metadata,
+                supportsAllDrives=True,
                 fields='id'
             ).execute()
             
