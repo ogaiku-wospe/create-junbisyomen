@@ -268,23 +268,50 @@ class FileProcessor:
                 
                 # 全ページのテキスト抽出
                 full_text = []
+                pages_need_ocr = []  # OCRが必要なページ
+                
                 for i, page in enumerate(pdf_reader.pages):
                     page_text = page.extract_text()
+                    page_char_count = len(page_text)
+                    
                     full_text.append({
                         "page_number": i + 1,
                         "text": page_text,
-                        "char_count": len(page_text)
+                        "char_count": page_char_count
                     })
+                    
+                    # ページごとにテキスト量をチェック
+                    # テキストが少ない（50文字未満）場合はOCR候補
+                    if page_char_count < 50:
+                        pages_need_ocr.append(i + 1)
+                        logger.debug(f"   ページ{i+1}: テキスト少ない({page_char_count}文字) - OCR候補")
                 
                 result['content']['pages'] = full_text
                 result['content']['total_text'] = '\n\n'.join([p['text'] for p in full_text])
                 
-                # テキストが少ない場合はOCR実行
+                # テキストが少ない場合、またはページごとに必要な場合はOCR実行
                 total_chars = sum(p['char_count'] for p in full_text)
-                if total_chars < 100 and OCR_ENABLED:
-                    logger.info("📷 PDF→画像変換してOCR実行")
+                if (total_chars < 100 or len(pages_need_ocr) > 0) and OCR_ENABLED:
+                    logger.info(f"📷 PDF→画像変換してOCR実行（全体: {total_chars}文字, OCR必要ページ: {pages_need_ocr}）")
                     ocr_result = self._pdf_to_image_ocr(pdf_path)
                     result['content']['ocr_results'] = ocr_result
+                    
+                    # OCR結果を元のテキストに統合
+                    if ocr_result and 'pages' in ocr_result:
+                        logger.info("   📝 OCR結果をテキストに統合")
+                        for ocr_page in ocr_result['pages']:
+                            page_num = ocr_page.get('page', 0)
+                            ocr_text = ocr_page.get('text', '')
+                            if page_num > 0 and page_num <= len(full_text):
+                                # 元のテキストが少ない場合、OCR結果で補完
+                                if full_text[page_num - 1]['char_count'] < 50 and len(ocr_text) > 50:
+                                    logger.info(f"   ページ{page_num}: OCRテキストで補完 ({len(ocr_text)}文字)")
+                                    full_text[page_num - 1]['text'] = ocr_text
+                                    full_text[page_num - 1]['char_count'] = len(ocr_text)
+                                    full_text[page_num - 1]['ocr_enhanced'] = True
+                        
+                        # total_textを再構築
+                        result['content']['total_text'] = '\n\n'.join([p['text'] for p in full_text])
             
             result['processed_file_path'] = pdf_path
             logger.info(f"✅ PDF処理完了")

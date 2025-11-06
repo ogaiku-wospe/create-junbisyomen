@@ -21,12 +21,17 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
+# プロジェクトルートをPythonパスに追加
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 # 自作モジュールのインポート
 try:
     from global_config import *
-    from metadata_extractor import MetadataExtractor
-    from file_processor import FileProcessor
-    from ai_analyzer_complete import AIAnalyzerComplete
+    from src.metadata_extractor import MetadataExtractor
+    from src.file_processor import FileProcessor
+    from src.ai_analyzer_complete import AIAnalyzerComplete
 except ImportError as e:
     print(f"❌ エラー: モジュールのインポートに失敗しました: {e}")
     print("現在のディレクトリを確認してください。")

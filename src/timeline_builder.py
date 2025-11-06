@@ -38,8 +38,8 @@ from pathlib import Path
 
 try:
     import global_config as gconfig
-    from case_manager import CaseManager
-    from gdrive_database_manager import GDriveDatabaseManager, create_database_manager
+    from src.case_manager import CaseManager
+    from src.gdrive_database_manager import GDriveDatabaseManager, create_database_manager
     from anthropic import Anthropic
     from dotenv import load_dotenv
     from googleapiclient.http import MediaFileUpload
@@ -318,11 +318,12 @@ class TimelineBuilder:
         """証拠から日付を抽出
         
         優先順位:
-        1. complete_metadata.format_specific.document_date
-        2. complete_metadata.format_specific.exif_data.DateTime*
-        3. complete_metadata.basic.created_time
-        4. ai_analysis.evidence_metadata.creation_date
-        5. ai_analysis.related_facts.timeline の最初の日付
+        1. ai_analysis.objective_analysis.temporal_information.document_date (CSV編集で更新される)
+        2. complete_metadata.format_specific.document_date
+        3. complete_metadata.format_specific.exif_data.DateTime*
+        4. complete_metadata.basic.created_time
+        5. ai_analysis.evidence_metadata.creation_date
+        6. ai_analysis.related_facts.timeline の最初の日付
         
         Returns:
             日付文字列（YYYY-MM-DD, YYYY-MM, YYYYのいずれか）またはNone
@@ -330,8 +331,18 @@ class TimelineBuilder:
         try:
             # Phase1分析データから取得
             phase1_analysis = evidence.get('phase1_complete_analysis', {})
+            ai_analysis = phase1_analysis.get('ai_analysis', {})
             
-            # 1. complete_metadataから文書日付を取得
+            # 1. AI分析のobjective_analysis.temporal_informationから取得（最優先: CSV編集で更新）
+            objective_analysis = ai_analysis.get('objective_analysis', {})
+            temporal_info = objective_analysis.get('temporal_information', {})
+            if 'document_date' in temporal_info:
+                date_str = temporal_info['document_date']
+                parsed_date = self._parse_date(date_str)
+                if parsed_date:
+                    return parsed_date
+            
+            # 2. complete_metadataから文書日付を取得
             complete_metadata = evidence.get('complete_metadata', {})
             format_specific = complete_metadata.get('format_specific', {})
             
@@ -341,7 +352,7 @@ class TimelineBuilder:
                 if parsed_date:
                     return parsed_date
             
-            # 2. EXIF情報から取得
+            # 3. EXIF情報から取得
             exif_data = format_specific.get('exif_data', {})
             for key in ['DateTime', 'DateTimeOriginal', 'DateTimeDigitized']:
                 if key in exif_data:
@@ -350,7 +361,7 @@ class TimelineBuilder:
                     if parsed_date:
                         return parsed_date
             
-            # 3. ファイル作成日時から取得
+            # 4. ファイル作成日時から取得
             basic_metadata = complete_metadata.get('basic', {})
             if 'created_time' in basic_metadata:
                 date_str = basic_metadata['created_time']
@@ -358,8 +369,7 @@ class TimelineBuilder:
                 if parsed_date:
                     return parsed_date
             
-            # 4. AI分析のevidence_metadataから取得
-            ai_analysis = phase1_analysis.get('ai_analysis', {})
+            # 5. AI分析のevidence_metadataから取得
             evidence_metadata = ai_analysis.get('evidence_metadata', {})
             if 'creation_date' in evidence_metadata:
                 date_str = evidence_metadata['creation_date']
@@ -367,7 +377,7 @@ class TimelineBuilder:
                 if parsed_date:
                     return parsed_date
             
-            # 5. related_factsのtimelineから取得
+            # 6. related_factsのtimelineから取得
             related_facts = ai_analysis.get('related_facts', {})
             timeline = related_facts.get('timeline', [])
             if timeline and len(timeline) > 0:
@@ -404,6 +414,11 @@ class TimelineBuilder:
         iso_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})T', date_str)
         if iso_match:
             return f"{iso_match.group(1)}-{iso_match.group(2)}-{iso_match.group(3)}"
+        
+        # スペース区切りのタイムスタンプ形式（YYYY-MM-DD HH:MM:SS...）
+        space_timestamp_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})\s', date_str)
+        if space_timestamp_match:
+            return f"{space_timestamp_match.group(1)}-{space_timestamp_match.group(2)}-{space_timestamp_match.group(3)}"
         
         # EXIF形式（YYYY:MM:DD HH:MM:SS）
         exif_match = re.match(r'^(\d{4}):(\d{2}):(\d{2})', date_str)
@@ -490,6 +505,48 @@ class TimelineBuilder:
         except Exception as e:
             print(f"⚠️ 証拠 {evidence.get('evidence_id', '不明')} の説明抽出に失敗: {e}")
             return "説明情報を取得できませんでした"
+    
+    def _clean_temporal_references(self, text: str) -> str:
+        """証拠説明文から時間的な混乱を招く表現を除去
+        
+        Args:
+            text: 元のテキスト
+        
+        Returns:
+            クリーニングされたテキスト
+        """
+        if not text:
+            return text
+        
+        try:
+            # 除去するフレーズのパターン
+            temporal_patterns = [
+                # スクリーンショット撮影日/記録日の記載
+                r'スクリーンショット撮影日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'記録日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'取得日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'撮影日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                r'キャプチャ日[：:：]\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?',
+                # 「～に記録された」「～に撮影された」等の表現
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?に記録された?',
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?に撮影された?',
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?に取得された?',
+                r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?にキャプチャされた?',
+            ]
+            
+            cleaned = text
+            for pattern in temporal_patterns:
+                cleaned = re.sub(pattern, '', cleaned)
+            
+            # 余分な空白や改行を整理
+            cleaned = re.sub(r'\n\s*\n', '\n', cleaned)  # 連続する空行を1つに
+            cleaned = re.sub(r'  +', ' ', cleaned)  # 連続するスペースを1つに
+            
+            return cleaned.strip()
+            
+        except Exception as e:
+            print(f"⚠️ テキストクリーニングに失敗: {e}")
+            return text
     
     def extract_related_facts_from_evidence(self, evidence: Dict) -> List[Dict]:
         """証拠からrelated_facts情報を抽出
@@ -843,14 +900,13 @@ class TimelineBuilder:
                 "key_facts": []
             }
         
-        print("\n🤖 Claude AI による客観的ストーリー生成を開始します...")
-        print("   （高品質な分析のため、数十秒かかる場合があります）")
-        
         # タイムラインイベントを JSON 形式に変換
         timeline_data = [event.to_dict() for event in timeline_events]
         
         # プロンプトを作成
         prompt = self._create_enhanced_narrative_prompt(timeline_data)
+        
+        # デバッグ出力は削除（不要な冗長出力を防ぐ）
         
         try:
             # Claude API を呼び出し
@@ -858,7 +914,7 @@ class TimelineBuilder:
                 model="claude-sonnet-4-20250514",
                 max_tokens=8000,
                 temperature=0.3,
-                system="あなたは法律文書の専門家です。提供された証拠の時系列情報から、完全に客観的で中立的なストーリーを生成してください。法的判断や主観的評価は一切含めず、証拠から得られる事実のみを時系列順に記述してください。また、各事実がどの証拠によって裏付けられているかを明確に示してください。",
+                system="あなたは法律文書の専門家です。提供された証拠の時系列情報から、完全に客観的で中立的なストーリーを生成してください。法的判断や主観的評価は一切含めず、証拠から得られる事実のみを時系列順に記述してください。また、各事実がどの証拠によって裏付けられているかを明確に示してください。\n\n【重要】各証拠の【日付表示】欄に記載された日付が、その証拠の正確な日付です。ストーリー生成時は、必ずこの【日付表示】欄の日付をそのまま使用してください。",
                 messages=[
                     {
                         "role": "user",
@@ -971,10 +1027,12 @@ class TimelineBuilder:
         prompt_parts.append("5. 事実間の因果関係は客観的に記述可能な範囲のみ")
         prompt_parts.append("6. 読みやすい日本語の文章形式")
         prompt_parts.append("7. **重要**: 各事実がどの証拠によって裏付けられているかを明確に示す")
-        prompt_parts.append("8. **重要**: 依頼者からの包括的情報を考慮し、全体の文脈を適切に反映する\n")
+        prompt_parts.append("8. **重要**: 依頼者からの包括的情報を考慮し、全体の文脈を適切に反映する")
+        prompt_parts.append("9. **🚨 極めて重要**: 各証拠の【日付表示】欄に記載された日付のみを使用すること\n")
         prompt_parts.append("【証拠情報】\n")
         
         # タイムラインデータを整形（詳細情報を含む）
+        # 重要: AIに送る前に、混乱を招く時間情報を除外する
         for event in timeline_data:
             date_display = event.get('date_display', '日付不明')
             evidence_number = event.get('evidence_number', '不明')
@@ -985,22 +1043,29 @@ class TimelineBuilder:
             legal_significance = event.get('legal_significance', {})
             temporal_context = event.get('temporal_context')
             
-            prompt_parts.append(f"\n【{date_display}】 ({evidence_number} / ID: {evidence_id})")
-            prompt_parts.append(f"情報源: {source_type}")
-            prompt_parts.append(f"\n{description}")
+            # 説明文から時間的な混乱を招く表現を除去
+            cleaned_description = self._clean_temporal_references(description)
             
-            # related_factsを追加
+            prompt_parts.append(f"\n【日付表示】: {date_display}")
+            prompt_parts.append(f"【証拠番号】: {evidence_number}")
+            prompt_parts.append(f"【証拠ID】: {evidence_id}")
+            prompt_parts.append(f"【情報源】: {source_type}")
+            prompt_parts.append(f"【内容】: {cleaned_description}")
+            
+            # related_factsを追加（時間的表現をクリーニング）
             if related_facts:
                 prompt_parts.append("\n【関連する事実】")
                 for fact in related_facts:
                     fact_type = fact.get('type', '不明')
                     fact_content = fact.get('content', '')
-                    prompt_parts.append(f"  - [{fact_type}] {fact_content}")
+                    cleaned_fact = self._clean_temporal_references(fact_content)
+                    prompt_parts.append(f"  - [{fact_type}] {cleaned_fact}")
             
-            # temporal_contextを追加
+            # temporal_contextを追加（時間的表現をクリーニング）
             if temporal_context:
+                cleaned_context = self._clean_temporal_references(temporal_context)
                 prompt_parts.append(f"\n【時系列的な文脈】")
-                prompt_parts.append(f"  {temporal_context}")
+                prompt_parts.append(f"  {cleaned_context}")
             
             # legal_significanceを追加（重要な場合のみ）
             if legal_significance and legal_significance.get('key_legal_points'):
@@ -1041,6 +1106,7 @@ class TimelineBuilder:
         prompt_parts.append("- 各事実には、それを裏付ける証拠のIDと証拠番号を明記")
         prompt_parts.append("- confidenceは、その事実の確実性（high/medium/low）")
         prompt_parts.append("- key_factsには、特に重要な事実のみを抽出")
+        prompt_parts.append("- **日付は【証拠情報】の【日付表示】欄に記載されたものをそのまま使用すること**")
         
         return "\n".join(prompt_parts)
     
@@ -1119,6 +1185,9 @@ class TimelineBuilder:
 3. 法的判断や主観的評価は含めない
 4. 事実と証拠の紐付けを明確に保持
 5. 改善箇所を明示
+6. **🚨 極めて重要**: 既存のストーリーに記載されている日付を変更してはならない
+   - 元のストーリーの日付は正確に検証済みなので、必ずそのまま維持すること
+   - ユーザーの指示で日付の変更を明示的に要求されない限り、日付は変更しない
 
 【出力形式】
 以下のJSON形式で出力してください：
@@ -1138,7 +1207,7 @@ class TimelineBuilder:
                 model="claude-sonnet-4-20250514",
                 max_tokens=8000,
                 temperature=0.3,
-                system="あなたは法律文書の専門家です。ユーザーの指示に従って時系列ストーリーを改善しますが、客観性と中立性を維持してください。",
+                system="あなたは法律文書の専門家です。ユーザーの指示に従って時系列ストーリーを改善しますが、客観性と中立性を維持してください。重要: 既存のストーリーに記載されている日付は正確に検証済みなので、ユーザーが明示的に日付の変更を指示しない限り、絶対に変更してはいけません。",
                 messages=[
                     {
                         "role": "user",
@@ -1684,7 +1753,7 @@ class TimelineBuilder:
         """
         try:
             # Google Drive サービスを取得
-            service = self.case_manager.get_drive_service()
+            service = self.case_manager.get_google_drive_service()
             if not service:
                 print("⚠️ Google Drive サービスが利用できません。")
                 return None
@@ -1692,13 +1761,19 @@ class TimelineBuilder:
             # 事件フォルダIDを取得
             case_folder_id = self.current_case.get('case_folder_id')
             if not case_folder_id:
-                print("⚠️ 事件フォルダIDが見つかりません。")
+                print("⚠️ 事件フォルダIDが見つかりません。Google Driveアップロードをスキップします。")
+                return None
+            
+            # フォルダIDの妥当性チェック
+            if not case_folder_id or len(case_folder_id) < 20:
+                print(f"⚠️ 事件フォルダIDが無効です: {case_folder_id}")
+                print("   Google Driveアップロードをスキップします。")
                 return None
             
             # timelineサブフォルダを探す or 作成
             timeline_folder_id = self._find_or_create_timeline_folder(service, case_folder_id)
             if not timeline_folder_id:
-                print("⚠️ timelineフォルダの作成に失敗しました。")
+                print("⚠️ timelineフォルダの作成に失敗しました。Google Driveアップロードをスキップします。")
                 return None
             
             # ファイルのMIMEタイプを判定
@@ -1769,7 +1844,13 @@ class TimelineBuilder:
             return folder.get('id')
             
         except Exception as e:
-            print(f"❌ timelineフォルダの作成に失敗しました: {e}")
+            # より詳細なエラーメッセージを表示
+            error_msg = str(e)
+            if "File not found" in error_msg or "404" in error_msg:
+                print(f"❌ 親フォルダが見つかりません（ID: {parent_folder_id}）")
+                print("   事件フォルダのIDが無効か、削除された可能性があります。")
+            else:
+                print(f"❌ timelineフォルダの作成に失敗しました: {e}")
             return None
     
     def _get_mime_type(self, file_name: str) -> str:
