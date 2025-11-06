@@ -477,14 +477,24 @@ class TimelineBuilder:
         return None
     
     def extract_description_from_evidence(self, evidence: Dict) -> str:
-        """証拠から説明文を抽出"""
+        """証拠から説明文を抽出（旧構造・新構造の両方に対応）"""
         try:
             phase1_analysis = evidence.get('phase1_complete_analysis', {})
             ai_analysis = phase1_analysis.get('ai_analysis', {})
             
             # full_contentから完全な説明を取得
             full_content = ai_analysis.get('full_content', {})
+            
+            # 旧構造: complete_description
             complete_description = full_content.get('complete_description', '')
+            
+            # 新構造: OCRテキスト、証拠の説明、文書の内容を試す
+            if not complete_description:
+                complete_description = full_content.get('OCRテキスト', '')
+            if not complete_description:
+                complete_description = ai_analysis.get('証拠の説明', '')
+            if not complete_description:
+                complete_description = ai_analysis.get('文書の内容', '')
             
             if complete_description:
                 # 長すぎる場合は要約（最初の500文字）
@@ -494,8 +504,20 @@ class TimelineBuilder:
             
             # フォールバック: evidence_metadataから基本情報
             evidence_metadata = ai_analysis.get('evidence_metadata', {})
-            doc_type = evidence_metadata.get('document_type', '不明な文書')
+            
+            # 旧構造
+            doc_type = evidence_metadata.get('document_type', '')
             summary = evidence_metadata.get('summary', '')
+            
+            # 新構造
+            if not doc_type:
+                doc_type = evidence_metadata.get('証拠の基本情報', '')
+            if not summary:
+                summary = evidence_metadata.get('ファイル情報', '')
+            
+            # 何も取得できなかった場合のデフォルト
+            if not doc_type:
+                doc_type = '不明な文書'
             
             if summary:
                 return f"{doc_type}: {summary}"
