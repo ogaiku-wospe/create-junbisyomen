@@ -1317,7 +1317,7 @@ class TimelineBuilder:
     def export_timeline(self, timeline_events: List[TimelineEvent], 
                        output_format: str = "json",
                        include_ai_narrative: bool = True) -> Optional[str]:
-        """タイムラインをエクスポート
+        """タイムラインをエクスポート（Google Drive直接保存）
         
         Args:
             timeline_events: TimelineEventのリスト
@@ -1325,16 +1325,11 @@ class TimelineBuilder:
             include_ai_narrative: AI 生成のナラティブを含めるか（デフォルト: True）
         
         Returns:
-            出力ファイルパス
+            Google DriveのURL
         """
         if not timeline_events:
             print("⚠️ エクスポートするタイムラインがありません。")
             return None
-        
-        # 出力ディレクトリを作成
-        case_id = self.current_case.get('case_id', 'unknown')
-        output_dir = os.path.join(gconfig.LOCAL_WORK_DIR, case_id, 'timeline')
-        os.makedirs(output_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -1347,22 +1342,26 @@ class TimelineBuilder:
         relationships = self.analyze_evidence_relationships(timeline_events)
         
         if output_format == "json":
-            return self._export_json(timeline_events, output_dir, timestamp, ai_narrative, relationships)
+            return self._export_json(timeline_events, timestamp, ai_narrative, relationships)
         elif output_format == "markdown":
-            return self._export_markdown(timeline_events, output_dir, timestamp, ai_narrative, relationships)
+            return self._export_markdown(timeline_events, timestamp, ai_narrative, relationships)
         elif output_format == "text":
-            return self._export_text(timeline_events, output_dir, timestamp, ai_narrative)
+            return self._export_text(timeline_events, timestamp, ai_narrative)
         elif output_format == "html":
-            return self._export_html(timeline_events, output_dir, timestamp, ai_narrative, relationships)
+            return self._export_html(timeline_events, timestamp, ai_narrative, relationships)
         else:
             print(f"❌ 未対応の出力形式: {output_format}")
             return None
     
-    def _export_json(self, timeline_events: List[TimelineEvent], output_dir: str, 
+    def _export_json(self, timeline_events: List[TimelineEvent], 
                     timestamp: str, ai_narrative: Optional[Dict], 
-                    relationships: Dict) -> str:
-        """JSON形式でエクスポート"""
-        output_path = os.path.join(output_dir, f"timeline_{timestamp}.json")
+                    relationships: Dict) -> Optional[str]:
+        """JSON形式でエクスポート（Google Drive直接保存）"""
+        import tempfile
+        
+        # 一時ファイルに保存
+        temp_file = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False)
+        output_path = temp_file.name
         
         case_id = self.current_case.get('case_id', 'unknown')
         
@@ -1384,22 +1383,32 @@ class TimelineBuilder:
             timeline_data["fact_evidence_mapping"] = ai_narrative.get("fact_evidence_mapping", [])
             timeline_data["key_facts"] = ai_narrative.get("key_facts", [])
         
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with temp_file as f:
             json.dump(timeline_data, f, ensure_ascii=False, indent=2)
         
-        print(f"\n✅ JSONファイルを出力しました: {output_path}")
+        print(f"\n✅ JSON形式でタイムラインを生成しました")
         
-        # Google Driveにアップロード
-        file_name = os.path.basename(output_path)
-        self._upload_to_gdrive(output_path, file_name)
+        # Google Driveに直接アップロード
+        file_name = f"timeline_{timestamp}.json"
+        print(f"\n📤 Google Driveにアップロード中...")
+        gdrive_url = self._upload_to_gdrive(output_path, file_name)
         
-        return output_path
+        # 一時ファイルを削除
+        try:
+            os.remove(output_path)
+        except:
+            pass
+        
+        return gdrive_url
     
-    def _export_markdown(self, timeline_events: List[TimelineEvent], output_dir: str,
+    def _export_markdown(self, timeline_events: List[TimelineEvent],
                         timestamp: str, ai_narrative: Optional[Dict],
-                        relationships: Dict) -> str:
-        """Markdown形式でエクスポート"""
-        output_path = os.path.join(output_dir, f"timeline_{timestamp}.md")
+                        relationships: Dict) -> Optional[str]:
+        """Markdown形式でエクスポート（Google Drive直接保存）"""
+        import tempfile
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.md', delete=False)
+        output_path = temp_file.name
         
         case_id = self.current_case.get('case_id', 'unknown')
         
@@ -1488,21 +1497,31 @@ class TimelineBuilder:
                 md_lines.append(event.description)
                 md_lines.append(f"")
         
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with temp_file as f:
             f.write('\n'.join(md_lines))
         
-        print(f"\n✅ Markdownファイルを出力しました: {output_path}")
+        print(f"\n✅ Markdown形式でタイムラインを生成しました")
         
-        # Google Driveにアップロード
-        file_name = os.path.basename(output_path)
-        self._upload_to_gdrive(output_path, file_name)
+        # Google Driveに直接アップロード
+        file_name = f"timeline_{timestamp}.md"
+        print(f"\n📤 Google Driveにアップロード中...")
+        gdrive_url = self._upload_to_gdrive(output_path, file_name)
         
-        return output_path
+        # 一時ファイルを削除
+        try:
+            os.remove(output_path)
+        except:
+            pass
+        
+        return gdrive_url
     
-    def _export_text(self, timeline_events: List[TimelineEvent], output_dir: str,
-                    timestamp: str, ai_narrative: Optional[Dict]) -> str:
-        """テキスト形式でエクスポート"""
-        output_path = os.path.join(output_dir, f"timeline_{timestamp}.txt")
+    def _export_text(self, timeline_events: List[TimelineEvent],
+                    timestamp: str, ai_narrative: Optional[Dict]) -> Optional[str]:
+        """テキスト形式でエクスポート（Google Drive直接保存）"""
+        import tempfile
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.txt', delete=False)
+        output_path = temp_file.name
         
         text_parts = []
         
@@ -1523,22 +1542,32 @@ class TimelineBuilder:
         narrative = self.generate_narrative(timeline_events)
         text_parts.append(narrative)
         
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with temp_file as f:
             f.write('\n'.join(text_parts))
         
-        print(f"\n✅ テキストファイルを出力しました: {output_path}")
+        print(f"\n✅ テキスト形式でタイムラインを生成しました")
         
-        # Google Driveにアップロード
-        file_name = os.path.basename(output_path)
-        self._upload_to_gdrive(output_path, file_name)
+        # Google Driveに直接アップロード
+        file_name = f"timeline_{timestamp}.txt"
+        print(f"\n📤 Google Driveにアップロード中...")
+        gdrive_url = self._upload_to_gdrive(output_path, file_name)
         
-        return output_path
+        # 一時ファイルを削除
+        try:
+            os.remove(output_path)
+        except:
+            pass
+        
+        return gdrive_url
     
-    def _export_html(self, timeline_events: List[TimelineEvent], output_dir: str,
+    def _export_html(self, timeline_events: List[TimelineEvent],
                     timestamp: str, ai_narrative: Optional[str],
-                    relationships: Dict) -> str:
-        """HTML形式でエクスポート"""
-        output_path = os.path.join(output_dir, f"timeline_{timestamp}.html")
+                    relationships: Dict) -> Optional[str]:
+        """HTML形式でエクスポート（Google Drive直接保存）"""
+        import tempfile
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.html', delete=False)
+        output_path = temp_file.name
         
         case_id = self.current_case.get('case_id', 'unknown')
         case_name = self.current_case.get('case_name', '不明')
@@ -1730,16 +1759,23 @@ class TimelineBuilder:
         html_parts.append("</body>")
         html_parts.append("</html>")
         
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with temp_file as f:
             f.write('\n'.join(html_parts))
         
-        print(f"\n✅ HTMLファイルを出力しました: {output_path}")
+        print(f"\n✅ HTML形式でタイムラインを生成しました")
         
-        # Google Driveにアップロード
-        file_name = os.path.basename(output_path)
-        self._upload_to_gdrive(output_path, file_name)
+        # Google Driveに直接アップロード
+        file_name = f"timeline_{timestamp}.html"
+        print(f"\n📤 Google Driveにアップロード中...")
+        gdrive_url = self._upload_to_gdrive(output_path, file_name)
         
-        return output_path
+        # 一時ファイルを削除
+        try:
+            os.remove(output_path)
+        except:
+            pass
+        
+        return gdrive_url
     
     def _upload_to_gdrive(self, local_file_path: str, file_name: str) -> Optional[str]:
         """ファイルをGoogle Driveの事件フォルダにアップロード
@@ -1796,10 +1832,10 @@ class TimelineBuilder:
             file_id = uploaded_file.get('id')
             web_link = uploaded_file.get('webViewLink')
             
-            print(f"✅ Google Driveにアップロードしました: {file_name}")
+            print(f"✅ Google Driveにアップロード完了")
             print(f"   📎 リンク: {web_link}")
             
-            return file_id
+            return web_link
             
         except Exception as e:
             print(f"⚠️ Google Driveへのアップロードに失敗しました: {e}")

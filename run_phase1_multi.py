@@ -2152,7 +2152,7 @@ class Phase1MultiRunner:
         return extended
     
     def _export_to_csv(self, evidence_list: List[Dict], filename: str, evidence_type: str = 'ko', full_data: bool = False, extended_mode: bool = False):
-        """CSV形式でエクスポート
+        """CSV形式でエクスポート（Google Drive直接保存）
         
         Args:
             evidence_list: 証拠リスト
@@ -2162,11 +2162,14 @@ class Phase1MultiRunner:
             extended_mode: True の場合、自然言語フィールドを個別列に展開（拡張モード）
         """
         import csv
+        import tempfile
         
         try:
-            output_path = os.path.join(os.getcwd(), filename)
+            # 一時ファイルに書き込み（Google Driveアップロード用）
+            temp_file = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8-sig', newline='', suffix='.csv', delete=False)
+            output_path = temp_file.name
             
-            with open(output_path, 'w', encoding='utf-8-sig', newline='') as csvfile:
+            with temp_file as csvfile:
                 if extended_mode:
                     # 拡張モード: 自然言語フィールドを個別列に展開
                     fieldnames = [
@@ -2331,16 +2334,22 @@ class Phase1MultiRunner:
                     writer.writerow(row_data)
             
             print(f"\n✅ CSV形式でエクスポートしました")
-            print(f"   ファイル: {output_path}")
             print(f"   件数: {len(evidence_list)}件")
             
-            # Google Driveへのアップロードを確認
-            upload_choice = input("\nGoogle Driveにもアップロードしますか？ (y/n): ").strip().lower()
-            if upload_choice == 'y':
-                gdrive_url = self._upload_export_file_to_gdrive(output_path, filename)
-                if gdrive_url:
-                    print(f"\n✅ Google Driveにアップロードしました")
-                    print(f"   URL: {gdrive_url}")
+            # Google Driveへ直接アップロード
+            print(f"\n📤 Google Driveにアップロード中...")
+            gdrive_url = self._upload_export_file_to_gdrive(output_path, filename)
+            if gdrive_url:
+                print(f"✅ Google Driveにアップロード完了")
+                print(f"   URL: {gdrive_url}")
+            else:
+                print(f"❌ Google Driveへのアップロードに失敗しました")
+            
+            # 一時ファイルを削除
+            try:
+                os.remove(output_path)
+            except:
+                pass
             
         except Exception as e:
             print(f"\n❌ エクスポートに失敗しました: {e}")
@@ -2348,7 +2357,7 @@ class Phase1MultiRunner:
             traceback.print_exc()
     
     def _upload_export_file_to_gdrive(self, local_path: str, filename: str) -> Optional[str]:
-        """エクスポートファイルをGoogle Driveにアップロード
+        """エクスポートファイルをGoogle Driveの「証拠分析用」フォルダにアップロード
         
         Args:
             local_path: ローカルファイルパス
@@ -2365,20 +2374,17 @@ class Phase1MultiRunner:
             
             from googleapiclient.http import MediaFileUpload
             
-            # エクスポートフォルダIDを取得
-            database = self.db_manager.load_database()
-            export_folder_id = database.get('metadata', {}).get('export_folder_id')
+            # 事件フォルダIDを取得
+            case_folder_id = self.current_case.get('case_folder_id')
+            if not case_folder_id:
+                print("❌ 事件フォルダIDが見つかりません")
+                return None
             
-            # エクスポートフォルダIDがない場合は事件フォルダIDにフォールバック
-            if not export_folder_id:
-                case_folder_id = database.get('metadata', {}).get('case_folder_id')
-                if not case_folder_id:
-                    print("❌ 事件フォルダIDが見つかりません")
-                    return None
-                print("⚠️  エクスポートフォルダIDが見つかりません。事件フォルダに保存します。")
-                target_folder_id = case_folder_id
-            else:
-                target_folder_id = export_folder_id
+            # 「証拠分析用」フォルダを検索または作成
+            target_folder_id = self._find_or_create_export_folder(service, case_folder_id)
+            if not target_folder_id:
+                print("❌ 証拠分析用フォルダの作成に失敗しました")
+                return None
             
             # ファイルタイプを判定
             file_ext = os.path.splitext(filename)[1].lower()
@@ -2410,6 +2416,51 @@ class Phase1MultiRunner:
             print(f"❌ Google Driveへのアップロード失敗: {e}")
             import traceback
             traceback.print_exc()
+            return None
+    
+    def _find_or_create_export_folder(self, service, case_folder_id: str) -> Optional[str]:
+        """「証拠分析用」フォルダを検索または作成
+        
+        Args:
+            service: Google Driveサービス
+            case_folder_id: 事件フォルダID
+        
+        Returns:
+            証拠分析用フォルダのID
+        """
+        try:
+            # 既存の「証拠分析用」フォルダを検索
+            query = f"name='証拠分析用' and '{case_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            results = service.files().list(
+                q=query,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields='files(id, name)',
+                pageSize=1
+            ).execute()
+            
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+            
+            # なければ作成
+            folder_metadata = {
+                'name': '証拠分析用',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [case_folder_id]
+            }
+            
+            folder = service.files().create(
+                body=folder_metadata,
+                supportsAllDrives=True,
+                fields='id'
+            ).execute()
+            
+            print(f"📁 証拠分析用フォルダを作成しました（Google Drive）")
+            return folder.get('id')
+            
+        except Exception as e:
+            print(f"❌ 証拠分析用フォルダの作成に失敗しました: {e}")
             return None
     
     def _download_file_from_gdrive_url(self, gdrive_url: str, output_path: str) -> bool:
@@ -2985,7 +3036,7 @@ class Phase1MultiRunner:
             traceback.print_exc()
     
     def _export_to_excel(self, evidence_list: List[Dict], filename: str, evidence_type: str = 'ko', full_data: bool = False, extended_mode: bool = False):
-        """Excel形式でエクスポート
+        """Excel形式でエクスポート（Google Drive直接保存）
         
         Args:
             evidence_list: 証拠リスト
@@ -3006,8 +3057,13 @@ class Phase1MultiRunner:
             return
         
         try:
+            import tempfile
+            
             type_name = "甲号証" if evidence_type == 'ko' else "乙号証"
-            output_path = os.path.join(os.getcwd(), filename)
+            # 一時ファイルに保存（Google Driveアップロード用）
+            temp_file = tempfile.NamedTemporaryFile(mode='wb', suffix='.xlsx', delete=False)
+            output_path = temp_file.name
+            temp_file.close()
             
             # ワークブックとシートを作成
             wb = openpyxl.Workbook()
@@ -3265,20 +3321,26 @@ class Phase1MultiRunner:
             # フリーズペイン（ヘッダー行を固定）
             ws.freeze_panes = "A2"
             
-            # ファイルを保存
+            # 一時ファイルに保存
             wb.save(output_path)
             
             print(f"\n✅ Excel形式でエクスポートしました")
-            print(f"   ファイル: {output_path}")
             print(f"   件数: {len(evidence_list)}件")
             
-            # Google Driveへのアップロードを確認
-            upload_choice = input("\nGoogle Driveにもアップロードしますか？ (y/n): ").strip().lower()
-            if upload_choice == 'y':
-                gdrive_url = self._upload_export_file_to_gdrive(output_path, filename)
-                if gdrive_url:
-                    print(f"\n✅ Google Driveにアップロードしました")
-                    print(f"   URL: {gdrive_url}")
+            # Google Driveへ直接アップロード
+            print(f"\n📤 Google Driveにアップロード中...")
+            gdrive_url = self._upload_export_file_to_gdrive(output_path, filename)
+            if gdrive_url:
+                print(f"✅ Google Driveにアップロード完了")
+                print(f"   URL: {gdrive_url}")
+            else:
+                print(f"❌ Google Driveへのアップロードに失敗しました")
+            
+            # 一時ファイルを削除
+            try:
+                os.remove(output_path)
+            except:
+                pass
             
         except Exception as e:
             print(f"\n❌ エクスポートに失敗しました: {e}")
