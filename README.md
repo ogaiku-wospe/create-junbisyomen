@@ -78,6 +78,26 @@ Phase1_Evidence Analysis Systemは、証拠ファイル（画像、PDF、Word、
 - **Anthropic Claude API キー**（推奨）- OpenAI Vision拒否時の高品質フォールバック
 - **Google Drive API 認証情報**（推奨）- 証拠ファイルの自動ダウンロード
 
+### システム依存関係（推奨）
+
+以下のソフトウェアをインストールすると、分析品質が大幅に向上します：
+
+- **LibreOffice** - Word文書をPDF経由で画像化し、Vision APIで分析（必須）
+- **Poppler** - PDFを画像に変換（複数ページPDF分析に必須）
+- **Tesseract OCR** - 画像からテキスト抽出（オプション）
+
+**インストール方法（macOS）**:
+```bash
+brew install libreoffice poppler tesseract
+```
+
+**インストール方法（Ubuntu）**:
+```bash
+sudo apt-get install libreoffice poppler-utils tesseract-ocr tesseract-ocr-jpn
+```
+
+📖 **詳細**: [SYSTEM_DEPENDENCIES.md](SYSTEM_DEPENDENCIES.md) を参照
+
 ## 🚀 クイックスタート
 
 ### 📖 詳細な手順は [QUICKSTART.md](QUICKSTART.md) をご覧ください

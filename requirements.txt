@@ -1,4 +1,19 @@
 # Phase 1完全版システム - 必須パッケージ
+#
+# 注意: このファイルにはPythonパッケージのみ記載されています。
+# システムレベルの依存関係（LibreOffice, Poppler, Tesseractなど）は
+# SYSTEM_DEPENDENCIES.md を参照してください。
+#
+# インストール方法:
+#   pip3 install -r requirements.txt
+#
+# システム依存関係のインストール:
+#   macOS:   brew install libreoffice poppler tesseract
+#   Ubuntu:  sudo apt-get install libreoffice poppler-utils tesseract-ocr tesseract-ocr-jpn
+#
+# 詳細: SYSTEM_DEPENDENCIES.md
+
+# AI API
 openai>=1.6.1
 anthropic>=0.39.0
 google-auth>=2.23.0
